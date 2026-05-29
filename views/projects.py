@@ -1,9 +1,9 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from database import get_connection, log_action
+from datetime import datetime
 import cv2
 from pyzbar.pyzbar import decode, ZBarSymbol
-from tkcalendar import DateEntry
 
 class ProjectsView(ctk.CTkFrame):
     def __init__(self, parent, user_info):
@@ -87,13 +87,13 @@ class ProjectsView(ctk.CTkFrame):
         start_f = ctk.CTkFrame(row_dates, fg_color="transparent")
         start_f.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         ctk.CTkLabel(start_f, text="Start Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
-        self.p_start = DateEntry(start_f, width=12, background='#1E4528', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        self.p_start = ctk.CTkEntry(start_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_start.pack(fill="x", pady=(5, 0))
 
         end_f = ctk.CTkFrame(row_dates, fg_color="transparent")
         end_f.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         ctk.CTkLabel(end_f, text="End Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
-        self.p_end = DateEntry(end_f, width=12, background='#1E4528', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        self.p_end = ctk.CTkEntry(end_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_end.pack(fill="x", pady=(5, 0))
 
         ctk.CTkButton(form_card, text="Submit for Approval", height=40, fg_color="#1E4528", hover_color="#14301C", font=("Inter", 13, "bold"), command=self.save_project).pack(fill="x", padx=20, pady=(20, 20))
@@ -298,14 +298,30 @@ class ProjectsView(ctk.CTkFrame):
                 self.workers_list.append(detected_data)
                 self._refresh_worker_tags()
 
+    def _validate_date(self, date_str, field_name):
+        if not date_str:
+            return True
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+            return True
+        except ValueError:
+            messagebox.showerror("Invalid Date",
+                f"{field_name} must be in YYYY-MM-DD format (e.g., 2025-01-15).",
+                parent=self.winfo_toplevel())
+            return False
+
     def save_project(self):
         name = self.p_name.get().strip()
         client = self.p_client.get().strip()
         project_head = self.p_head.get().strip()
         workers_str = ", ".join(self.workers_list) if self.workers_list else ""
         desc_text = self.p_desc.get("1.0", "end-1c").strip()
+        start_date = self.p_start.get().strip() or None
+        end_date = self.p_end.get().strip() or None
 
         if not name or not client: return messagebox.showerror("Error", "Project Name and Client are required.", parent=self.winfo_toplevel())
+        if not self._validate_date(start_date, "Start Date"): return
+        if not self._validate_date(end_date, "End Date"): return
         if not self.req_cart: return messagebox.showerror("Error", "Please add at least one tool requirement.", parent=self.winfo_toplevel())
 
         conn = get_connection()
@@ -322,10 +338,10 @@ class ProjectsView(ctk.CTkFrame):
                     messagebox.showwarning("Notice", "Modifying an approved project reverts it to Pending status for Admin review.", parent=self.winfo_toplevel())
                 
                 cursor.execute('''
-                    UPDATE projects 
+                    UPDATE projects
                     SET name=%s, description=%s, project_head=%s, client=%s, location=%s, workers_assigned=%s, start_date=%s, end_date=%s, status=%s
                     WHERE project_id=%s
-                ''', (name, desc_text, project_head, client, self.p_location.get(), workers_str, self.p_start.get(), self.p_end.get(), new_status, editing_id))
+                ''', (name, desc_text, project_head, client, self.p_location.get(), workers_str, start_date, end_date, new_status, editing_id))
                 
                 cursor.execute("DELETE FROM project_requirements WHERE project_id=%s", (editing_id,)) 
                 project_id = editing_id
@@ -334,7 +350,7 @@ class ProjectsView(ctk.CTkFrame):
                 cursor.execute('''
                     INSERT INTO projects (name, description, project_head, client, location, workers_assigned, start_date, end_date, manager_id, status)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'Pending')
-                ''', (name, desc_text, project_head, client, self.p_location.get(), workers_str, self.p_start.get(), self.p_end.get(), self.user_info['user_id']))
+                ''', (name, desc_text, project_head, client, self.p_location.get(), workers_str, start_date, end_date, self.user_info['user_id']))
                 project_id = cursor.lastrowid
                 action_text = "Submitted"
 
@@ -352,7 +368,9 @@ class ProjectsView(ctk.CTkFrame):
 
             self.p_name.delete(0, 'end'); self.p_desc.delete("1.0", "end")
             self.p_head.delete(0, 'end'); self.p_client.delete(0, 'end')
-            self.p_location.delete(0, 'end'); self.workers_list.clear()
+            self.p_location.delete(0, 'end')
+            self.p_start.delete(0, 'end'); self.p_end.delete(0, 'end')
+            self.workers_list.clear()
             self._refresh_worker_tags(); self.req_cart.clear()
             self.refresh_req_cart()
             self.editing_project_id = None; self.editing_project_status = None
@@ -539,7 +557,8 @@ class ProjectsView(ctk.CTkFrame):
             self.p_head.delete(0, 'end'); self.p_head.insert(0, row.get('project_head') or "")
             self.p_client.delete(0, 'end'); self.p_client.insert(0, row['client'])
             self.p_location.delete(0, 'end'); self.p_location.insert(0, row['location'])
-            self.p_start.set_date(row['start_date']); self.p_end.set_date(row['end_date'])
+            self.p_start.delete(0, 'end'); self.p_start.insert(0, str(row['start_date']) if row.get('start_date') else "")
+            self.p_end.delete(0, 'end'); self.p_end.insert(0, str(row['end_date']) if row.get('end_date') else "")
             
             self.workers_list = [w.strip() for w in (row.get('workers_assigned') or "").split(',') if w.strip()]
             self._refresh_worker_tags()

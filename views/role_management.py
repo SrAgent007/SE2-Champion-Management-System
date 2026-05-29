@@ -2,6 +2,11 @@ import customtkinter as ctk
 from tkinter import messagebox
 from database import get_connection
 import bcrypt
+import secrets
+import os
+import tempfile
+import qrcode
+from PIL import Image, ImageDraw, ImageFont
 
 
 class RoleManagementView(ctk.CTkFrame):
@@ -27,9 +32,10 @@ class RoleManagementView(ctk.CTkFrame):
     # LEFT: Register / Add User Form
     # ==========================================
     def build_form_panel(self):
-        form_card = ctk.CTkScrollableFrame(
+        self._form_card = ctk.CTkScrollableFrame(
             self.inner, fg_color="white", corner_radius=10, width=300)
-        form_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        self._form_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        form_card = self._form_card
 
         ctk.CTkLabel(form_card, text="Register New User",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(
@@ -39,35 +45,60 @@ class RoleManagementView(ctk.CTkFrame):
                      font=("Inter", 11), text_color="gray", wraplength=240,
                      justify="left").pack(anchor="w", padx=20, pady=(0, 15))
 
-        def field(label, ph, show=None):
-            ctk.CTkLabel(form_card, text=label, font=("Inter", 12, "bold"),
+        def field(parent, label, ph, show=None):
+            ctk.CTkLabel(parent, text=label, font=("Inter", 12, "bold"),
                          text_color="#1A1A1A").pack(anchor="w", padx=20)
             kw = dict(placeholder_text=ph)
             if show:
                 kw["show"] = show
-            e = ctk.CTkEntry(form_card, **kw)
+            e = ctk.CTkEntry(parent, **kw)
             e.pack(fill="x", padx=20, pady=(5, 10))
             return e
 
-        self.reg_emp_id = field("Employee ID *", "e.g., EMP-001")
-        self.reg_name = field("Full Name *",    "Juan Dela Cruz")
-        self.reg_email = field("Email Address",  "employee@champion.com")
+        self.reg_emp_id = field(form_card, "Employee ID *", "e.g., EMP-001")
+        self.reg_name   = field(form_card, "Full Name *",   "Juan Dela Cruz")
+        self.reg_email  = field(form_card, "Email Address", "employee@champion.com")
 
         ctk.CTkLabel(form_card, text="Role *",
                      font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.reg_role = ctk.CTkOptionMenu(form_card, values=["Staff", "Admin"],
-                                          fg_color="#F9FAFB", text_color="black")
+        self.reg_role = ctk.CTkOptionMenu(
+            form_card, values=["Staff", "Admin", "Worker"],
+            fg_color="#F9FAFB", text_color="black",
+            command=self._on_reg_role_change)
         self.reg_role.pack(fill="x", padx=20, pady=(5, 10))
 
-        self.reg_pass = field(
-            "Password *",         "Min. 8 characters", show="•")
-        self.reg_confirm = field("Confirm Password *",
-                                 "Re-enter password",  show="•")
+        # Bottom section (password fields OR worker notice + buttons) — rebuilt on role change
+        self._reg_bottom = ctk.CTkFrame(form_card, fg_color="transparent")
+        self._reg_bottom.pack(fill="x")
+        self._build_reg_bottom("Staff")
 
-        btn_row = ctk.CTkFrame(form_card, fg_color="transparent")
+    def _build_reg_bottom(self, role):
+        for w in self._reg_bottom.winfo_children():
+            w.destroy()
+
+        if role == "Worker":
+            ctk.CTkLabel(self._reg_bottom,
+                         text="Workers cannot log into the system.\nNo password is required.",
+                         font=("Inter", 11), text_color="#D35400",
+                         wraplength=240, justify="left").pack(anchor="w", padx=20, pady=(0, 12))
+            self.reg_pass    = None
+            self.reg_confirm = None
+        else:
+            ctk.CTkLabel(self._reg_bottom, text="Password *",
+                         font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+            self.reg_pass = ctk.CTkEntry(self._reg_bottom,
+                                         placeholder_text="Min. 8 characters", show="•")
+            self.reg_pass.pack(fill="x", padx=20, pady=(5, 10))
+
+            ctk.CTkLabel(self._reg_bottom, text="Confirm Password *",
+                         font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+            self.reg_confirm = ctk.CTkEntry(self._reg_bottom,
+                                            placeholder_text="Re-enter password", show="•")
+            self.reg_confirm.pack(fill="x", padx=20, pady=(5, 10))
+
+        btn_row = ctk.CTkFrame(self._reg_bottom, fg_color="transparent")
         btn_row.pack(fill="x", padx=20, pady=(5, 20))
         btn_row.grid_columnconfigure((0, 1), weight=1)
-
         ctk.CTkButton(btn_row, text="Register",
                       fg_color="#1E4528", hover_color="#14301C",
                       font=("Inter", 12, "bold"),
@@ -78,27 +109,41 @@ class RoleManagementView(ctk.CTkFrame):
                       font=("Inter", 12, "bold"),
                       command=self.clear_form).grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
+    def _on_reg_role_change(self, role):
+        self._build_reg_bottom(role)
+
     def execute_register(self):
         emp_id = self.reg_emp_id.get().strip()
-        name = self.reg_name.get().strip()
-        email = self.reg_email.get().strip()
-        role = self.reg_role.get()
-        pwd = self.reg_pass.get().strip()
-        cpwd = self.reg_confirm.get().strip()
+        name   = self.reg_name.get().strip()
+        email  = self.reg_email.get().strip()
+        role   = self.reg_role.get()
+        pwd    = self.reg_pass.get().strip()    if self.reg_pass    else ""
+        cpwd   = self.reg_confirm.get().strip() if self.reg_confirm else ""
 
-        if not all([emp_id, name, pwd, cpwd]):
+        if not emp_id or not name:
             messagebox.showerror("Validation Error",
-                                 "Employee ID, Full Name, and Password are required.",
+                                 "Employee ID and Full Name are required.",
                                  parent=self.winfo_toplevel())
             return
-        if pwd != cpwd:
-            messagebox.showerror("Password Mismatch", "Passwords do not match.",
-                                 parent=self.winfo_toplevel())
-            return
-        if len(pwd) < 8:
-            messagebox.showerror("Weak Password", "Password must be at least 8 characters.",
-                                 parent=self.winfo_toplevel())
-            return
+
+        if role != "Worker":
+            if not pwd or not cpwd:
+                messagebox.showerror("Validation Error",
+                                     "Password is required for Staff and Admin accounts.",
+                                     parent=self.winfo_toplevel())
+                return
+            if pwd != cpwd:
+                messagebox.showerror("Password Mismatch", "Passwords do not match.",
+                                     parent=self.winfo_toplevel())
+                return
+            if len(pwd) < 8:
+                messagebox.showerror("Weak Password", "Password must be at least 8 characters.",
+                                     parent=self.winfo_toplevel())
+                return
+            hashed = bcrypt.hashpw(pwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        else:
+            # Workers have no login — store an unguessable placeholder hash
+            hashed = bcrypt.hashpw(secrets.token_bytes(32), bcrypt.gensalt()).decode("utf-8")
 
         conn = get_connection()
         if not conn:
@@ -113,8 +158,6 @@ class RoleManagementView(ctk.CTkFrame):
                                      parent=self.winfo_toplevel())
                 return
 
-            hashed = bcrypt.hashpw(pwd.encode(
-                "utf-8"), bcrypt.gensalt()).decode("utf-8")
             cursor.execute("""
                 INSERT INTO user (employee_id, full_name, email, password_hash, role)
                 VALUES (%s, %s, %s, %s, %s)
@@ -138,8 +181,7 @@ class RoleManagementView(ctk.CTkFrame):
         self.reg_name.delete(0, "end")
         self.reg_email.delete(0, "end")
         self.reg_role.set("Staff")
-        self.reg_pass.delete(0, "end")
-        self.reg_confirm.delete(0, "end")
+        self._build_reg_bottom("Staff")
 
     # ==========================================
     # RIGHT: User Management Table
@@ -170,7 +212,7 @@ class RoleManagementView(ctk.CTkFrame):
                                        self.load_user_table()]).pack(side="right")
 
         headers = ["Employee ID", "Full Name", "Email", "Role", "Actions"]
-        weights = [2,             3,            3,       1,      2]
+        weights = [2,             3,            3,       1,      3]
 
         hdr = ctk.CTkFrame(table_card, fg_color="#1E4528",
                            corner_radius=5, height=38)
@@ -210,7 +252,7 @@ class RoleManagementView(ctk.CTkFrame):
             cursor.execute(sql, params)
             rows = cursor.fetchall()
 
-            weights = [2, 3, 3, 1, 2]
+            weights = [2, 3, 3, 1, 3]
 
             if not rows:
                 ctk.CTkLabel(self.user_scroll, text="No users found.",
@@ -220,7 +262,7 @@ class RoleManagementView(ctk.CTkFrame):
             for i, row in enumerate(rows):
                 rf = ctk.CTkFrame(self.user_scroll,
                                   fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=40)
+                                  height=44)
                 rf.pack(fill="x", pady=2)
                 rf.pack_propagate(False)
 
@@ -228,18 +270,27 @@ class RoleManagementView(ctk.CTkFrame):
                         row["email"], row["role"]]
                 for col, (val, w) in enumerate(zip(vals, weights)):
                     rf.grid_columnconfigure(col, weight=w)
-                    color = "#2ECC71" if col == 3 and val == "Admin" else "#1A1A1A"
+                    if col == 3 and val == "Admin":
+                        color = "#2ECC71"
+                    elif col == 3 and val == "Worker":
+                        color = "#D35400"
+                    else:
+                        color = "#1A1A1A"
                     ctk.CTkLabel(rf, text=val, font=("Inter", 11),
                                  text_color=color).grid(row=0, column=col, padx=10, pady=8, sticky="w")
 
                 rf.grid_columnconfigure(4, weight=weights[4])
                 action_frame = ctk.CTkFrame(rf, fg_color="transparent")
                 action_frame.grid(row=0, column=4, padx=5, pady=4, sticky="w")
-                ctk.CTkButton(action_frame, text="Edit", width=55, height=28,
+                ctk.CTkButton(action_frame, text="Edit", width=50, height=28,
                               fg_color="#F1C40F", text_color="black",
                               hover_color="#D4AC0D", font=("Inter", 10, "bold"),
-                              command=lambda r=row: self.open_edit_modal(r)).pack(side="left", padx=(0, 4))
-                ctk.CTkButton(action_frame, text="Delete", width=55, height=28,
+                              command=lambda r=row: self.open_edit_modal(r)).pack(side="left", padx=(0, 3))
+                ctk.CTkButton(action_frame, text="🔖", width=32, height=28,
+                              fg_color="#3498DB", text_color="white",
+                              hover_color="#2980B9", font=("Inter", 12),
+                              command=lambda r=row: self.print_user_badge(r)).pack(side="left", padx=(0, 3))
+                ctk.CTkButton(action_frame, text="Delete", width=50, height=28,
                               fg_color="#FFEAEA", text_color="#D8000C",
                               hover_color="#FFC0C0", font=("Inter", 10, "bold"),
                               command=lambda r=row: self.delete_user(r)).pack(side="left")
@@ -253,17 +304,16 @@ class RoleManagementView(ctk.CTkFrame):
                 conn.close()
 
     def open_edit_modal(self, row):
-        # --- FIX: Wider modal so buttons and fields are never compressed ---
         modal = ctk.CTkToplevel(self)
         modal.title(f"Edit User — {row['full_name']}")
-        modal.geometry("500x460")
+        modal.geometry("500x500")
         modal.configure(fg_color="white")
         modal.resizable(False, False)
         modal.attributes("-topmost", True)
         modal.grab_set()
         modal.update_idletasks()
         x = (modal.winfo_screenwidth() // 2) - 250
-        y = (modal.winfo_screenheight() // 2) - 230
+        y = (modal.winfo_screenheight() // 2) - 250
         modal.geometry(f"+{x}+{y}")
 
         ctk.CTkLabel(modal, text=f"Edit: {row['full_name']}",
@@ -274,7 +324,7 @@ class RoleManagementView(ctk.CTkFrame):
         form = ctk.CTkFrame(modal, fg_color="transparent")
         form.pack(fill="x", padx=30)
 
-        def make_row(lbl, val):
+        def make_field(lbl, val):
             ctk.CTkLabel(form, text=lbl, font=("Inter", 11, "bold"),
                          text_color="#1A1A1A").pack(anchor="w")
             e = ctk.CTkEntry(form, height=35)
@@ -282,32 +332,58 @@ class RoleManagementView(ctk.CTkFrame):
             e.pack(fill="x", pady=(4, 10))
             return e
 
-        name_e = make_row("Full Name",  row["full_name"])
-        email_e = make_row(
-            "Email",      row["email"] if row["email"] != "—" else "")
+        name_e  = make_field("Full Name",  row["full_name"])
+        email_e = make_field("Email",      row["email"] if row["email"] != "—" else "")
 
         ctk.CTkLabel(form, text="Role", font=("Inter", 11, "bold"),
                      text_color="#1A1A1A").pack(anchor="w")
-        role_menu = ctk.CTkOptionMenu(form, values=["Staff", "Admin"],
+        role_menu = ctk.CTkOptionMenu(form, values=["Staff", "Admin", "Worker"],
                                       fg_color="#F9FAFB", text_color="black", height=35)
         role_menu.set(row["role"])
         role_menu.pack(fill="x", pady=(4, 10))
 
-        ctk.CTkLabel(form, text="New Password (leave blank to keep current)",
-                     font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
-        pass_e = ctk.CTkEntry(form, placeholder_text="Optional new password",
-                              show="•", height=35)
-        pass_e.pack(fill="x", pady=(4, 15))
+        # Dynamic password section — hidden for Worker
+        pass_section = ctk.CTkFrame(form, fg_color="transparent")
+        pass_e_holder = [None]  # mutable container so inner functions can update reference
+
+        def build_pass_section(target_role):
+            for w in pass_section.winfo_children():
+                w.destroy()
+            if target_role == "Worker":
+                ctk.CTkLabel(pass_section,
+                             text="Workers cannot log into the system. Password is not used.",
+                             font=("Inter", 11), text_color="#D35400",
+                             wraplength=400, justify="left").pack(anchor="w", pady=(0, 8))
+                pass_e_holder[0] = None
+            else:
+                ctk.CTkLabel(pass_section,
+                             text="New Password (leave blank to keep current)",
+                             font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
+                e = ctk.CTkEntry(pass_section, placeholder_text="Optional new password",
+                                 show="•", height=35)
+                e.pack(fill="x", pady=(4, 15))
+                pass_e_holder[0] = e
+
+        role_menu.configure(command=lambda r: build_pass_section(r))
+        build_pass_section(row["role"])
+        pass_section.pack(fill="x")
 
         def save_edit():
-            new_name = name_e.get().strip()
+            new_name  = name_e.get().strip()
             new_email = email_e.get().strip()
-            new_role = role_menu.get()
-            new_pass = pass_e.get().strip()
+            new_role  = role_menu.get()
+            new_pass  = pass_e_holder[0].get().strip() if pass_e_holder[0] else ""
 
             if not new_name:
-                messagebox.showerror(
-                    "Error", "Full Name is required.", parent=modal)
+                messagebox.showerror("Error", "Full Name is required.", parent=modal)
+                return
+
+            # If promoting a Worker to a login role, a password is required
+            old_role = row["role"]
+            if new_role != "Worker" and old_role == "Worker" and not new_pass:
+                messagebox.showerror("Password Required",
+                                     "Assigning a login role requires setting a password.",
+                                     parent=modal)
                 return
 
             conn = get_connection()
@@ -315,7 +391,13 @@ class RoleManagementView(ctk.CTkFrame):
                 return
             try:
                 cursor = conn.cursor()
-                if new_pass:
+                if new_role == "Worker":
+                    # Keep existing hash or store placeholder — Workers never log in
+                    cursor.execute("""
+                        UPDATE user SET full_name=%s, email=%s, role=%s
+                        WHERE user_id=%s
+                    """, (new_name, new_email or None, new_role, row["user_id"]))
+                elif new_pass:
                     if len(new_pass) < 8:
                         messagebox.showerror("Weak Password",
                                              "Password must be at least 8 characters.",
@@ -333,8 +415,7 @@ class RoleManagementView(ctk.CTkFrame):
                         WHERE user_id=%s
                     """, (new_name, new_email or None, new_role, row["user_id"]))
                 conn.commit()
-                messagebox.showinfo(
-                    "Updated", "User account updated successfully.", parent=modal)
+                messagebox.showinfo("Updated", "User account updated successfully.", parent=modal)
                 modal.destroy()
                 self.load_user_table()
             except Exception as e:
@@ -345,13 +426,82 @@ class RoleManagementView(ctk.CTkFrame):
                     conn.close()
 
         btn_row = ctk.CTkFrame(modal, fg_color="transparent")
-        btn_row.pack(fill="x", padx=30, pady=(0, 20))
+        btn_row.pack(fill="x", padx=30, pady=(5, 20))
         ctk.CTkButton(btn_row, text="Save Changes", height=38,
                       fg_color="#1E4528", hover_color="#14301C",
                       command=save_edit).pack(side="left", padx=(0, 10), fill="x", expand=True)
         ctk.CTkButton(btn_row, text="Cancel", height=38,
                       fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
                       command=modal.destroy).pack(side="right", fill="x", expand=True)
+
+    def print_user_badge(self, row):
+        try:
+            emp_id   = str(row["employee_id"])
+            emp_name = row["full_name"]
+            emp_role = row["role"]
+
+            # Generate QR code
+            qr = qrcode.QRCode(version=1, box_size=14, border=2)
+            qr.add_data(emp_id)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="#1E4528", back_color="white").convert("RGB")
+
+            # Canvas
+            W = 420
+            H = qr_img.height + 220
+            canvas = Image.new("RGB", (W, H), "white")
+
+            # Header band
+            draw_bg = ImageDraw.Draw(canvas)
+            draw_bg.rectangle([(0, 0), (W, 50)], fill="#1E4528")
+
+            # Paste QR centred below header
+            qr_x = (W - qr_img.width) // 2
+            canvas.paste(qr_img, (qr_x, 60))
+
+            draw = ImageDraw.Draw(canvas)
+
+            # Fonts — try Windows system fonts, fall back gracefully
+            fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+            def _font(filename, size):
+                for path in [os.path.join(fonts_dir, filename), filename]:
+                    try:
+                        return ImageFont.truetype(path, size)
+                    except (IOError, OSError):
+                        continue
+                try:
+                    return ImageFont.load_default(size=size)
+                except TypeError:
+                    return ImageFont.load_default()
+
+            f_company = _font("arialbd.ttf", 16)
+            f_name    = _font("arialbd.ttf", 28)
+            f_role    = _font("arial.ttf",   18)
+            f_id      = _font("arial.ttf",   14)
+
+            def cx(text, font):
+                bbox = draw.textbbox((0, 0), text, font=font)
+                return (W - (bbox[2] - bbox[0])) // 2
+
+            # Header text
+            draw.text((cx("Champion Fine Tooling Corp.", f_company), 14),
+                      "Champion Fine Tooling Corp.", fill="white", font=f_company)
+
+            # Employee info below QR
+            y = qr_img.height + 75
+            draw.text((cx(emp_name, f_name), y),     emp_name, fill="#1A1A1A", font=f_name)
+            draw.text((cx(emp_role, f_role), y + 42), emp_role, fill="#1E4528", font=f_role)
+            draw.text((cx(f"ID: {emp_id}", f_id), y + 76),
+                      f"ID: {emp_id}", fill="gray", font=f_id)
+
+            # Save & open
+            path = os.path.join(tempfile.gettempdir(), f"Badge_{emp_id}.pdf")
+            canvas.save(path, "PDF", resolution=150.0)
+            os.startfile(path)
+
+        except Exception as e:
+            messagebox.showerror("Badge Error", f"Could not generate badge:\n{e}",
+                                 parent=self.winfo_toplevel())
 
     def delete_user(self, row):
         if messagebox.askyesno(

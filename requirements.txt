@@ -23,4 +23,3 @@ python-dotenv
 pyzbar==0.1.9
 qrcode
 six==1.17.0
-tkcalendar

@@ -5,7 +5,8 @@ import cv2
 from pyzbar.pyzbar import decode, ZBarSymbol
 import os
 from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime
+from datetime import datetime, timedelta, date as _date
+import calendar as _cal
 
 class BorrowingView(ctk.CTkFrame): 
     def __init__(self, parent, user_info=None, *args, **kwargs):
@@ -35,10 +36,9 @@ class BorrowingView(ctk.CTkFrame):
 
         ctk.CTkLabel(top_bar, text="Tool Management", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
-        tabs = ["📤 Tool Issuance", "📥 Tool Retrieval"]
+        tabs = ["📤 Tool Issuance", "📥 Tool Retrieval", "📅 Deployment Schedule"]
         self.tab_var = ctk.StringVar(value=tabs[0])
-        
-        # FIX: Naka-align na sa right side ang switch tab button
+
         self.seg_btn = ctk.CTkSegmentedButton(
             top_bar, values=tabs, variable=self.tab_var, command=self.switch_tab,
             fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
@@ -54,20 +54,285 @@ class BorrowingView(ctk.CTkFrame):
         self.switch_tab(tabs[0])
 
     def switch_tab(self, selected_tab):
-        for widget in self.tab_content.winfo_children(): widget.destroy()
-        
+        for widget in self.tab_content.winfo_children():
+            widget.destroy()
+
+        if selected_tab == "📅 Deployment Schedule":
+            self.build_calendar_tab(self.tab_content)
+            return
+
         if selected_tab == "📤 Tool Issuance":
             self.build_issuance_tab(self.tab_content)
             self.b_emp_id.focus_set()
         else:
             self.build_retrieval_tab(self.tab_content)
             self.r_emp_id.focus_set()
-            
+
         self.build_history_table(self.tab_content)
         self.load_transaction_history()
 
+    # ══════════════════════════════════════════════════════════
+    # DEPLOYMENT SCHEDULE CALENDAR
+    # ══════════════════════════════════════════════════════════
+    def build_calendar_tab(self, parent):
+        now = datetime.now()
+        self._cal_year      = now.year
+        self._cal_month     = now.month
+        self._cal_selected  = None
+        self._cal_projects_by_day = {}
+
+        outer = ctk.CTkFrame(parent, fg_color="transparent")
+        outer.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        outer.grid_columnconfigure(0, weight=3)
+        outer.grid_columnconfigure(1, weight=1)
+        outer.grid_rowconfigure(0, weight=1)
+
+        # Left: scrollable calendar card
+        self._cal_card = ctk.CTkScrollableFrame(outer, fg_color="white", corner_radius=10)
+        self._cal_card.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
+
+        # Right: day-detail card
+        self._cal_detail = ctk.CTkFrame(outer, fg_color="white", corner_radius=10)
+        self._cal_detail.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
+
+        self._render_calendar()
+        self._render_day_detail(None)
+
+    # ── Query ──────────────────────────────────────────────────
+    def _cal_query_projects(self):
+        import calendar as _cal_mod
+        first = _date(self._cal_year, self._cal_month, 1)
+        last  = _date(self._cal_year, self._cal_month,
+                      _cal_mod.monthrange(self._cal_year, self._cal_month)[1])
+        by_day = {}
+        conn = get_connection()
+        if not conn:
+            return by_day
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT project_id, name, client, start_date, end_date, status
+                FROM projects
+                WHERE status NOT IN ('Cancelled', 'Completed')
+                  AND start_date <= %s AND end_date >= %s
+                ORDER BY start_date
+            """, (last, first))
+            for p in cursor.fetchall():
+                s = max(p["start_date"], first)
+                e = min(p["end_date"],   last)
+                cur = s
+                while cur <= e:
+                    if cur.month == self._cal_month:
+                        by_day.setdefault(cur.day, []).append(p)
+                    cur += timedelta(days=1)
+        except Exception:
+            pass
+        finally:
+            if conn.is_connected():
+                cursor.close(); conn.close()
+        return by_day
+
+    # ── Render full month grid ─────────────────────────────────
+    def _render_calendar(self):
+        import calendar as _cal_mod
+        card = self._cal_card
+        for w in card.winfo_children():
+            w.destroy()
+
+        self._cal_projects_by_day = self._cal_query_projects()
+
+        # ── Navigation row ──────────────────────────────────────
+        nav = ctk.CTkFrame(card, fg_color="transparent")
+        nav.pack(fill="x", padx=20, pady=(20, 8))
+
+        ctk.CTkButton(nav, text="◀", width=34, height=34,
+                      fg_color="#E0E0E0", text_color="#1A1A1A", hover_color="#CCCCCC",
+                      font=("Inter", 13, "bold"),
+                      command=self._cal_prev).pack(side="left")
+
+        month_label = datetime(self._cal_year, self._cal_month, 1).strftime("%B  %Y")
+        ctk.CTkLabel(nav, text=month_label,
+                     font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left", padx=14)
+
+        ctk.CTkButton(nav, text="▶", width=34, height=34,
+                      fg_color="#E0E0E0", text_color="#1A1A1A", hover_color="#CCCCCC",
+                      font=("Inter", 13, "bold"),
+                      command=self._cal_next).pack(side="left")
+
+        ctk.CTkButton(nav, text="Today", width=74, height=34,
+                      fg_color="#1E4528", hover_color="#14301C",
+                      font=("Inter", 11, "bold"),
+                      command=self._cal_goto_today).pack(side="right")
+
+        # ── Legend ──────────────────────────────────────────────
+        legend = ctk.CTkFrame(card, fg_color="#F9FAFB", corner_radius=8)
+        legend.pack(fill="x", padx=20, pady=(0, 12))
+        STATUS_COLORS = {
+            "Pending":  "#F39C12",
+            "Approved": "#3498DB",
+            "Ongoing":  "#2ECC71",
+            "Overdue":  "#E74C3C",
+        }
+        for status, color in STATUS_COLORS.items():
+            chip = ctk.CTkFrame(legend, fg_color="transparent")
+            chip.pack(side="left", padx=14, pady=7)
+            ctk.CTkFrame(chip, fg_color=color, width=12, height=12,
+                         corner_radius=6).pack(side="left", padx=(0, 5))
+            ctk.CTkLabel(chip, text=status, font=("Inter", 10),
+                         text_color="#555555").pack(side="left")
+
+        # ── Day-of-week header ───────────────────────────────────
+        dow = ctk.CTkFrame(card, fg_color="transparent")
+        dow.pack(fill="x", padx=20)
+        DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for i, d in enumerate(DOW):
+            dow.grid_columnconfigure(i, weight=1)
+            ctk.CTkLabel(dow, text=d, font=("Inter", 11, "bold"),
+                         text_color="#888888").grid(row=0, column=i, pady=6, sticky="ew")
+
+        # ── Month grid ──────────────────────────────────────────
+        grid_f = ctk.CTkFrame(card, fg_color="transparent")
+        grid_f.pack(fill="x", padx=20, pady=(0, 20))
+        for i in range(7):
+            grid_f.grid_columnconfigure(i, weight=1)
+
+        today         = _date.today()
+        first_weekday = _date(self._cal_year, self._cal_month, 1).weekday()
+        total_days    = _cal_mod.monthrange(self._cal_year, self._cal_month)[1]
+        STATUS_COLORS_EXT = {**STATUS_COLORS, "Completed": "#95A5A6"}
+
+        col, row_idx = first_weekday, 0
+
+        # blank leading cells
+        for _ in range(first_weekday):
+            ctk.CTkFrame(grid_f, fg_color="transparent", height=74).grid(
+                row=0, column=col - first_weekday + _, padx=2, pady=2, sticky="nsew")
+
+        for day in range(1, total_days + 1):
+            cur_date = _date(self._cal_year, self._cal_month, day)
+            projs    = self._cal_projects_by_day.get(day, [])
+            is_today = (cur_date == today)
+            is_sel   = (self._cal_selected == day)
+
+            if is_today:
+                bg = "#1E4528";  num_col = "white"
+            elif is_sel:
+                bg = "#E8F5E9";  num_col = "#1E4528"
+            elif projs:
+                bg = "#F0F8FF";  num_col = "#1A1A1A"
+            else:
+                bg = "#F9FAFB";  num_col = "#7F8C8D"
+
+            cell = ctk.CTkFrame(grid_f, fg_color=bg, corner_radius=8, height=74)
+            cell.grid(row=row_idx, column=col, padx=2, pady=2, sticky="nsew")
+            cell.grid_propagate(False)
+            cell.configure(cursor="hand2")
+            cell.bind("<Button-1>", lambda e, d=day: self._cal_click(d))
+
+            num = ctk.CTkLabel(cell, text=str(day),
+                               font=("Inter", 12, "bold"), text_color=num_col)
+            num.pack(anchor="nw", padx=7, pady=(5, 0))
+            num.configure(cursor="hand2")
+            num.bind("<Button-1>", lambda e, d=day: self._cal_click(d))
+
+            if projs:
+                dots = ctk.CTkFrame(cell, fg_color="transparent")
+                dots.pack(anchor="sw", padx=5, pady=(0, 5))
+                for p in projs[:4]:
+                    raw = p["status"].replace(" (OVERDUE)", "")
+                    clr = "#E74C3C" if "OVERDUE" in p["status"] else STATUS_COLORS_EXT.get(raw, "#95A5A6")
+                    ctk.CTkFrame(dots, fg_color=clr, width=8, height=8,
+                                 corner_radius=4).pack(side="left", padx=1)
+                if len(projs) > 4:
+                    ctk.CTkLabel(dots, text=f"+{len(projs)-4}",
+                                 font=("Inter", 8), text_color="#888888").pack(side="left")
+
+            col += 1
+            if col == 7:
+                col = 0
+                row_idx += 1
+
+    # ── Day-detail panel ──────────────────────────────────────
+    def _render_day_detail(self, day):
+        card = self._cal_detail
+        for w in card.winfo_children():
+            w.destroy()
+
+        if day is None:
+            ctk.CTkLabel(card, text="📅", font=("Inter", 42), text_color="#CCCCCC").pack(pady=(50, 8))
+            ctk.CTkLabel(card, text="Select a day\nto view projects",
+                         font=("Inter", 12), text_color="#AAAAAA", justify="center").pack()
+            return
+
+        date_str = datetime(self._cal_year, self._cal_month, day).strftime("%B %d, %Y")
+        ctk.CTkLabel(card, text=date_str,
+                     font=("Inter", 13, "bold"), text_color="#1A1A1A").pack(pady=(20, 4), padx=15)
+
+        projs = self._cal_projects_by_day.get(day, [])
+        STATUS_COLORS = {"Pending": "#F39C12", "Approved": "#3498DB",
+                         "Ongoing": "#2ECC71", "Completed": "#95A5A6"}
+
+        if not projs:
+            ctk.CTkLabel(card, text="No projects active\non this day.",
+                         font=("Inter", 11), text_color="gray", justify="center").pack(pady=20)
+            return
+
+        ctk.CTkLabel(card, text=f"{len(projs)} project(s) active",
+                     font=("Inter", 10), text_color="gray").pack(padx=15, pady=(0, 8))
+
+        scroll = ctk.CTkScrollableFrame(card, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=8, pady=(0, 10))
+
+        for p in projs:
+            raw    = p["status"].replace(" (OVERDUE)", "")
+            color  = "#E74C3C" if "OVERDUE" in p["status"] else STATUS_COLORS.get(raw, "#95A5A6")
+            pcard  = ctk.CTkFrame(scroll, fg_color="#F9FAFB", corner_radius=8)
+            pcard.pack(fill="x", pady=4)
+            ctk.CTkLabel(pcard, text=p["name"],
+                         font=("Inter", 11, "bold"), text_color="#1A1A1A",
+                         wraplength=165, justify="left").pack(anchor="w", padx=10, pady=(8, 2))
+            ctk.CTkLabel(pcard, text=p["client"],
+                         font=("Inter", 10), text_color="#888888",
+                         wraplength=165, justify="left").pack(anchor="w", padx=10)
+            dates_txt = f"{p['start_date']}  →  {p['end_date']}"
+            ctk.CTkLabel(pcard, text=dates_txt,
+                         font=("Inter", 9), text_color="#AAAAAA").pack(anchor="w", padx=10)
+            ctk.CTkLabel(pcard, text=p["status"],
+                         font=("Inter", 10, "bold"), text_color=color).pack(anchor="w", padx=10, pady=(2, 8))
+
+    # ── Navigation callbacks ───────────────────────────────────
+    def _cal_prev(self):
+        if self._cal_month == 1:
+            self._cal_year -= 1; self._cal_month = 12
+        else:
+            self._cal_month -= 1
+        self._cal_selected = None
+        self._render_calendar()
+        self._render_day_detail(None)
+
+    def _cal_next(self):
+        if self._cal_month == 12:
+            self._cal_year += 1; self._cal_month = 1
+        else:
+            self._cal_month += 1
+        self._cal_selected = None
+        self._render_calendar()
+        self._render_day_detail(None)
+
+    def _cal_goto_today(self):
+        now = datetime.now()
+        self._cal_year = now.year; self._cal_month = now.month
+        self._cal_selected = now.day
+        self._render_calendar()
+        self._render_day_detail(now.day)
+
+    def _cal_click(self, day):
+        self._cal_selected = day
+        self._render_calendar()
+        self._render_day_detail(day)
+
     # --- SIDE-BY-SIDE UI BUILDERS ---
-    
+
     def build_issuance_tab(self, parent):
         form_card = ctk.CTkScrollableFrame(parent, fg_color="white", corner_radius=10, width=380)
         form_card.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
@@ -165,12 +430,18 @@ class BorrowingView(ctk.CTkFrame):
         top_bar = ctk.CTkFrame(table_card, fg_color="transparent")
         top_bar.pack(fill="x", padx=20, pady=(20, 10))
         
-        ctk.CTkLabel(top_bar, text="Deployment History", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
-        
+        title_col = ctk.CTkFrame(top_bar, fg_color="transparent")
+        title_col.pack(side="left")
+        ctk.CTkLabel(title_col, text="Deployment History", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w")
+        ctk.CTkLabel(title_col, text="Click any row to view details or reprint receipt.",
+                     font=("Inter", 10), text_color="gray").pack(anchor="w")
+
         self.search_entry = ctk.CTkEntry(top_bar, placeholder_text="Search Name or Tag...", width=200)
         self.search_entry.pack(side="right", padx=(10, 0))
         self.search_entry.bind("<Return>", lambda e: self.load_transaction_history())
-        ctk.CTkButton(top_bar, text="Search", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=self.load_transaction_history).pack(side="right")
+        ctk.CTkButton(top_bar, text="Search", width=70, fg_color="#E0E0E0", text_color="black",
+                      hover_color="#CCCCCC", font=("Inter", 11, "bold"),
+                      command=self.load_transaction_history).pack(side="right")
 
         header_frame = ctk.CTkFrame(table_card, fg_color="#1E4528", corner_radius=5, height=40)
         header_frame.pack(fill="x", padx=(20, 36))
@@ -198,36 +469,186 @@ class BorrowingView(ctk.CTkFrame):
             query = """
                 SELECT tr.type, t.name as tool_name, t.tag_id, COUNT(tr.transaction_id) as grouped_qty,
                        u.full_name, tr.status,
-                       DATE_FORMAT(DATE_ADD(MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)), INTERVAL 8 HOUR), '%b %d, %Y %h:%i %p') as b_date
+                       DATE_FORMAT(DATE_ADD(MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)), INTERVAL 8 HOUR), '%b %d, %Y %h:%i %p') as b_date,
+                       MIN(tr.transaction_id) as first_trn,
+                       MAX(tr.transaction_id) as last_trn,
+                       IFNULL(MAX(tr.purpose), '—') as purpose,
+                       MAX(tr.project_id) as project_id,
+                       u.user_id as uid
                 FROM transaction tr
                 JOIN tool t ON tr.tool_id = t.tool_id
                 JOIN user u ON tr.user_id = u.user_id
             """
+            group_by = " GROUP BY tr.type, t.name, t.tag_id, u.full_name, u.user_id, tr.status"
+            order_by = " ORDER BY MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)) DESC LIMIT 50"
             if search_q:
                 query += " WHERE u.full_name LIKE %s OR t.tag_id LIKE %s OR t.name LIKE %s"
-                query += " GROUP BY tr.type, t.name, t.tag_id, u.full_name, tr.status ORDER BY MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)) DESC LIMIT 50"
+                query += group_by + order_by
                 cursor.execute(query, (f"%{search_q}%", f"%{search_q}%", f"%{search_q}%"))
             else:
-                query += " GROUP BY tr.type, t.name, t.tag_id, u.full_name, tr.status ORDER BY MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)) DESC LIMIT 50"
+                query += group_by + order_by
                 cursor.execute(query)
-                
+
             results = cursor.fetchall()
             if not results:
                 ctk.CTkLabel(self.data_scroll, text="No transactions found.", text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(results):
-                display_data = [row['type'], row['tool_name'], row['tag_id'] if row['tag_id'] else "Unassigned", str(row['grouped_qty']), row['full_name'], row['b_date'], row['status']]
+                display_data = [
+                    row['type'], row['tool_name'],
+                    row['tag_id'] if row['tag_id'] else "Unassigned",
+                    str(row['grouped_qty']), row['full_name'], row['b_date'], row['status']
+                ]
                 row_frame = ctk.CTkFrame(self.data_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=40)
                 row_frame.pack(fill="x", pady=2)
                 row_frame.pack_propagate(False)
-                
+                row_frame.configure(cursor="hand2")
+                row_frame.bind("<Button-1>", lambda e, r=row: self.open_transaction_modal(r))
+
                 for col, (text, weight) in enumerate(zip(display_data, self.weights)):
                     row_frame.grid_columnconfigure(col, weight=weight)
                     txt_color = "#D8000C" if col == 6 and text == "Active" else ("#2ECC71" if col == 6 else "#1A1A1A")
-                    ctk.CTkLabel(row_frame, text=text, font=("Inter", 11), text_color=txt_color).grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11), text_color=txt_color)
+                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                    lbl.configure(cursor="hand2")
+                    lbl.bind("<Button-1>", lambda e, r=row: self.open_transaction_modal(r))
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
+
+    def open_transaction_modal(self, row):
+        trn_label = (f"TRN-{row['first_trn']}–{row['last_trn']}"
+                     if row['first_trn'] != row['last_trn']
+                     else f"TRN-{row['first_trn']}")
+
+        modal = ctk.CTkToplevel(self)
+        modal.title(f"Transaction Overview — {trn_label}")
+        modal.geometry("520x480")
+        modal.configure(fg_color="white")
+        modal.attributes("-topmost", True)
+        modal.grab_set()
+        modal.update_idletasks()
+        x = (modal.winfo_screenwidth() // 2) - 260
+        y = (modal.winfo_screenheight() // 2) - 240
+        modal.geometry(f"+{x}+{y}")
+
+        # Header
+        type_color = "#1E4528" if row['type'] == "Issue" else "#D35400"
+        ctk.CTkLabel(modal, text="Transaction Overview",
+                     font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(pady=(20, 2))
+        ctk.CTkLabel(modal, text=trn_label,
+                     font=("Inter", 12, "bold"), text_color=type_color).pack(pady=(0, 12))
+
+        # Details card
+        card = ctk.CTkFrame(modal, fg_color="#F9FAFB", corner_radius=10)
+        card.pack(fill="x", padx=24, pady=(0, 10))
+
+        def detail_row(label, value, val_color="#1A1A1A"):
+            r = ctk.CTkFrame(card, fg_color="transparent")
+            r.pack(fill="x", padx=16, pady=(6, 0))
+            ctk.CTkLabel(r, text=label, font=("Inter", 11, "bold"),
+                         text_color="#1E4528", width=110, anchor="w").pack(side="left")
+            ctk.CTkLabel(r, text=value, font=("Inter", 11),
+                         text_color=val_color, wraplength=330, justify="left").pack(side="left")
+
+        status_color = "#D8000C" if row['status'] == "Active" else "#2ECC71"
+        detail_row("Type:",       row['type'])
+        detail_row("Date/Time:",  row['b_date'])
+        detail_row("Assignee:",   row['full_name'])
+        detail_row("Purpose:",    row['purpose'])
+        detail_row("Status:",     row['status'], val_color=status_color)
+        ctk.CTkFrame(card, height=8, fg_color="transparent").pack()
+
+        # Items section
+        ctk.CTkLabel(modal, text="Items in this Transaction",
+                     font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=24, pady=(6, 2))
+        items_frame = ctk.CTkScrollableFrame(modal, fg_color="#F9FAFB", corner_radius=8, height=80)
+        items_frame.pack(fill="x", padx=24, pady=(0, 12))
+
+        # Query all tools in the same project+user batch
+        self._load_modal_items(items_frame, row)
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(modal, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=24, pady=(0, 20))
+
+        ctk.CTkButton(btn_frame, text="🖨  Reprint Receipt", height=38,
+                      fg_color="#1E4528", hover_color="#14301C",
+                      font=("Inter", 12, "bold"),
+                      command=lambda: self._reprint_from_history(row, modal)).pack(
+            side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkButton(btn_frame, text="Close", height=38, width=80,
+                      fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
+                      font=("Inter", 12, "bold"),
+                      command=modal.destroy).pack(side="right")
+
+    def _load_modal_items(self, frame, row):
+        conn = get_connection()
+        if not conn:
+            ctk.CTkLabel(frame, text=f"{row['tool_name']}  (Qty: {row['grouped_qty']})",
+                         font=("Inter", 11), text_color="#1A1A1A").pack(anchor="w", padx=10, pady=6)
+            return
+        try:
+            cursor = conn.cursor(dictionary=True)
+            if row.get('project_id'):
+                cursor.execute("""
+                    SELECT t.name, COUNT(*) as qty
+                    FROM transaction tr
+                    JOIN tool t ON tr.tool_id = t.tool_id
+                    WHERE tr.project_id = %s AND tr.user_id = %s AND tr.type = %s
+                      AND DATE(tr.borrow_date) = (
+                          SELECT DATE(borrow_date) FROM transaction WHERE transaction_id = %s
+                      )
+                    GROUP BY t.name
+                """, (row['project_id'], row['uid'], row['type'], row['first_trn']))
+                items = cursor.fetchall()
+            else:
+                items = [{"name": row['tool_name'], "qty": row['grouped_qty']}]
+
+            for item in items:
+                ctk.CTkLabel(frame,
+                             text=f"• {item['name']}  (Qty: {item['qty']})",
+                             font=("Inter", 11), text_color="#1A1A1A").pack(
+                    anchor="w", padx=10, pady=(4, 0))
+        except Exception:
+            ctk.CTkLabel(frame, text=f"• {row['tool_name']}  (Qty: {row['grouped_qty']})",
+                         font=("Inter", 11), text_color="#1A1A1A").pack(anchor="w", padx=10, pady=6)
+        finally:
+            if conn.is_connected(): cursor.close(); conn.close()
+
+    def _reprint_from_history(self, row, modal=None):
+        conn = get_connection()
+        tool_names = []
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                if row.get('project_id'):
+                    cursor.execute("""
+                        SELECT t.name, COUNT(*) as qty
+                        FROM transaction tr
+                        JOIN tool t ON tr.tool_id = t.tool_id
+                        WHERE tr.project_id = %s AND tr.user_id = %s AND tr.type = %s
+                          AND DATE(tr.borrow_date) = (
+                              SELECT DATE(borrow_date) FROM transaction WHERE transaction_id = %s
+                          )
+                        GROUP BY t.name
+                    """, (row['project_id'], row['uid'], row['type'], row['first_trn']))
+                    tool_names = [f"{r['name']} (Qty: {r['qty']})" for r in cursor.fetchall()]
+                else:
+                    tool_names = [f"{row['tool_name']} (Qty: {row['grouped_qty']})"]
+            except Exception:
+                tool_names = [f"{row['tool_name']} (Qty: {row['grouped_qty']})"]
+            finally:
+                if conn.is_connected(): cursor.close(); conn.close()
+
+        if not tool_names:
+            tool_names = [f"{row['tool_name']} (Qty: {row['grouped_qty']})"]
+
+        trn_range = (f"{row['first_trn']}-{row['last_trn']}"
+                     if row['first_trn'] != row['last_trn']
+                     else str(row['first_trn']))
+        purpose = row.get('purpose') or "—"
+        self.print_master_receipt(trn_range, row['full_name'], tool_names, purpose)
 
     def open_scanner(self, target_entry, trigger_method):
         try: cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) 
@@ -540,44 +961,120 @@ class BorrowingView(ctk.CTkFrame):
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
+    # ── Receipt helpers ────────────────────────────────────────────
+    def _load_receipt_font(self, filename, size):
+        fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+        for path in [os.path.join(fonts_dir, filename), filename]:
+            try:
+                return ImageFont.truetype(path, size)
+            except (IOError, OSError):
+                continue
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            return ImageFont.load_default()
+
+    def _build_receipt_image(self, trans_id_range, b_name, tool_names, purpose):
+        W = 800
+        LINE = 40
+        H = 280 + max(60, len(tool_names) * LINE) + 120
+        img = Image.new("RGB", (W, H), "#FAFAFA")
+        draw = ImageDraw.Draw(img)
+
+        # Header band
+        draw.rectangle([(0, 0), (W, 90)], fill="#1E4528")
+        f_hdr   = self._load_receipt_font("arialbd.ttf", 22)
+        f_sub   = self._load_receipt_font("arial.ttf",   14)
+        f_label = self._load_receipt_font("arial.ttf",   13)
+        f_value = self._load_receipt_font("arialbd.ttf", 16)
+        f_items = self._load_receipt_font("arialbd.ttf", 15)
+        f_item  = self._load_receipt_font("arial.ttf",   15)
+        f_sig   = self._load_receipt_font("arial.ttf",   12)
+
+        draw.text((30, 18), "CHAMPION FINE TOOLING CORP.", fill="white", font=f_hdr)
+        draw.text((30, 56), "MASTER DEPLOYMENT RECEIPT", fill="#A8D5BA", font=f_sub)
+
+        # Transaction metadata
+        current_time = datetime.now().strftime("%B %d, %Y  —  %I:%M %p")
+        y = 110
+        meta = [
+            ("Transaction:",  f"TRN-[{trans_id_range}]"),
+            ("Date & Time:",  current_time),
+            ("Issued To:",    b_name),
+            ("Project:",      str(purpose)[:70]),
+        ]
+        for label, value in meta:
+            draw.text((30,  y), label, fill="#888888", font=f_label)
+            draw.text((180, y), value, fill="#1A1A1A", font=f_value)
+            y += 38
+
+        draw.line([(30, y + 8), (W - 30, y + 8)], fill="#DDDDDD", width=1)
+        y += 24
+
+        # Items
+        draw.text((30, y), "Items Issued:", fill="#1A1A1A", font=f_items)
+        y += 32
+        for name in tool_names:
+            draw.ellipse([(30, y + 6), (40, y + 16)], fill="#1E4528")
+            draw.text((52, y), name, fill="#1A1A1A", font=f_item)
+            y += LINE
+
+        draw.line([(30, y + 18), (W - 30, y + 18)], fill="#DDDDDD", width=1)
+        y += 36
+        draw.text((30,      y), "Authorized Admin Signature: ___________________________", fill="#888888", font=f_sig)
+        draw.text((W - 280, y), "Received By: ___________________", fill="#888888", font=f_sig)
+
+        return img
+
     def print_master_receipt(self, trans_id_range, b_name, tool_names, purpose):
         try:
-            canvas_height = 400 + (len(tool_names) * 30)
-            canvas = Image.new('RGB', (600, canvas_height), 'white')
-            draw = ImageDraw.Draw(canvas)
-            try:
-                font_title = ImageFont.truetype("arialbd.ttf", 24)
-                font_body = ImageFont.truetype("arial.ttf", 20)
-                font_bold = ImageFont.truetype("arialbd.ttf", 20)
-            except IOError:
-                font_title = font_body = font_bold = ImageFont.load_default()
-                
-            current_time = datetime.now().strftime("%B %d, %Y - %I:%M %p")
-            draw.text((20, 20), "CHAMPION FINE TOOLING", fill="#1E4528", font=font_title)
-            draw.text((20, 60), "MASTER DEPLOYMENT RECEIPT", fill="black", font=font_title)
-            draw.line((20, 100, 580, 100), fill="black", width=2)
-            draw.text((20, 120), f"Transaction ID(s): TRN-[{trans_id_range}]", fill="black", font=font_body)
-            draw.text((20, 160), f"Date & Time: {current_time}", fill="black", font=font_body)
-            draw.text((20, 200), f"Issued To: {b_name}", fill="black", font=font_body)
-            draw.text((20, 240), f"Project/Location: {purpose}", fill="black", font=font_body)
-            draw.text((20, 290), "Items Issued:", fill="black", font=font_bold)
-            
-            y_offset = 320
-            for name in tool_names:
-                draw.text((40, y_offset), f"• {name}", fill="black", font=font_body)
-                y_offset += 30
-                
-            draw.line((20, y_offset + 30, 580, y_offset + 30), fill="black", width=1)
-            draw.text((20, y_offset + 50), "Authorized Admin Signature: ___________________", fill="black", font=font_body)
+            img = self._build_receipt_image(trans_id_range, b_name, tool_names, purpose)
 
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            file_path = os.path.join(temp_dir, f"Receipt.pdf")
-            canvas.save(file_path, "PDF", resolution=100.0)
-            os.startfile(file_path)
-            messagebox.showinfo("Success", "Receipt generated and opened in your default PDF viewer.", parent=self.winfo_toplevel())
+            # ── Instant in-app preview ────────────────────────────
+            preview = ctk.CTkToplevel(self)
+            preview.title(f"Receipt — TRN-{trans_id_range}")
+            preview.configure(fg_color="white")
+            preview.attributes("-topmost", True)
+            preview.grab_set()
+            preview.update_idletasks()
+            pw, ph = 840, min(img.height // 2 + 120, 700)
+            sw, sh = preview.winfo_screenwidth(), preview.winfo_screenheight()
+            preview.geometry(f"{pw}x{ph}+{(sw-pw)//2}+{(sh-ph)//2}")
+
+            # Scrollable image area
+            scroll_area = ctk.CTkScrollableFrame(preview, fg_color="#F0F0F0")
+            scroll_area.pack(fill="both", expand=True, padx=0, pady=0)
+
+            display_w = img.width // 2
+            display_h = img.height // 2
+            ctk_img = ctk.CTkImage(light_image=img, size=(display_w, display_h))
+            img_lbl = ctk.CTkLabel(scroll_area, image=ctk_img, text="")
+            img_lbl.pack(padx=20, pady=20)
+
+            # Button bar
+            btn_bar = ctk.CTkFrame(preview, fg_color="white", height=60)
+            btn_bar.pack(fill="x", side="bottom")
+            btn_bar.pack_propagate(False)
+
+            def export_pdf():
+                import tempfile as _tf
+                path = os.path.join(_tf.gettempdir(), "Receipt.pdf")
+                img.save(path, "PDF", resolution=150.0)
+                os.startfile(path)
+
+            ctk.CTkButton(btn_bar, text="🖨  Export & Open PDF", height=38,
+                          fg_color="#1E4528", hover_color="#14301C",
+                          font=("Inter", 12, "bold"),
+                          command=export_pdf).pack(side="left", padx=20, pady=11)
+            ctk.CTkButton(btn_bar, text="Close", height=38, width=90,
+                          fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
+                          font=("Inter", 12, "bold"),
+                          command=preview.destroy).pack(side="right", padx=20, pady=11)
+
         except Exception as e:
-            messagebox.showwarning("Print Warning", f"Transaction saved, but receipt failed to print:\n{e}", parent=self.winfo_toplevel())
+            messagebox.showwarning("Receipt Warning",
+                                   f"Transaction saved but receipt failed:\n{e}",
+                                   parent=self.winfo_toplevel())
 
     def verify_tool_for_return(self):
         if not self.active_return_user_id:

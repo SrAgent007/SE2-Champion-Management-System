@@ -167,7 +167,7 @@ class ReportsView(ctk.CTkFrame):
 
                 rf = ctk.CTkFrame(scroll,
                                   fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=35)
+                                  height=40)
                 rf.pack(fill="x", pady=2)
                 rf.pack_propagate(False)
 
@@ -266,7 +266,7 @@ class ReportsView(ctk.CTkFrame):
 
                 rf = ctk.CTkFrame(scroll,
                                   fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=35)
+                                  height=40)
                 rf.pack(fill="x", pady=2)
                 rf.pack_propagate(False)
 
@@ -360,7 +360,7 @@ class ReportsView(ctk.CTkFrame):
 
                 rf = ctk.CTkFrame(scroll,
                                   fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=35)
+                                  height=40)
                 rf.pack(fill="x", pady=2)
                 rf.pack_propagate(False)
 

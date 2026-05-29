@@ -29,7 +29,7 @@ class TrackingView(ctk.CTkFrame):
     # ==========================================
     def _make_header(self, parent, headers, weights):
         hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=38)
-        hdr.pack(fill="x", padx=20)
+        hdr.pack(fill="x", padx=(20, 36))
         hdr.pack_propagate(False)
         total = sum(weights)
         for col, (h, w) in enumerate(zip(headers, weights)):

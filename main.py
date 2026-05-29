@@ -179,6 +179,12 @@ class LoginApp(ctk.CTk):
             cursor.execute("SELECT * FROM user WHERE employee_id = %s", (username,))
             user = cursor.fetchone()
 
+            # Hard-block: Workers are field personnel with no system login access
+            if user and user.get("role") == "Worker":
+                self.show_error("Access Denied: Field Workers do not have system login privileges.")
+                self.login_button.configure(state="normal", text="Login")
+                return
+
             if user and bcrypt.checkpw(password.encode('utf-8'),
                                         user['password_hash'].encode('utf-8')):
                 self.failed_attempts = 0
