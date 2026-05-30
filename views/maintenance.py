@@ -566,7 +566,7 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Inactive / Archived Employees",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["User ID", "Employee ID", "Full Name", "Role", "Archived At", "Action"]
+        headers = ["User ID", "Employee ID", "Full Name", "Role", "Status", "Action"]
         weights = [1, 2, 3, 2, 2, 1]
         self._emp_weights = weights
         self._make_header(frame, headers, weights)
@@ -581,12 +581,12 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fetch inactive employees with status change timestamps
+            # Fetch inactive employees
             cursor.execute("""
-                SELECT user_id, employee_id, full_name, role, status, updated_at
+                SELECT user_id, employee_id, full_name, role, status
                 FROM user 
                 WHERE status != 'Active'
-                ORDER BY updated_at DESC
+                ORDER BY user_id DESC
             """)
             rows = cursor.fetchall()
             
@@ -595,8 +595,8 @@ class MaintenanceView(ctk.CTkFrame):
                 return
 
             for i, row in enumerate(rows):
-                updated_ts = row["updated_at"].strftime("%Y-%m-%d %H:%M") if row.get("updated_at") else "—"
-                vals = [str(row["user_id"]), row["employee_id"], row["full_name"], row["role"], updated_ts, "Restore"]
+                status_display = row["status"] if row.get("status") else "Inactive"
+                vals = [str(row["user_id"]), row["employee_id"], row["full_name"], row["role"], status_display, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(self._emp_scroll, vals, self._emp_weights, bg)
                 
@@ -649,7 +649,7 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Completed / Archived Projects",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["Project ID", "Project Name", "Client/Dept", "Status", "Archived At", "Action"]
+        headers = ["Project ID", "Project Name", "Client/Dept", "Status", "End Date", "Action"]
         weights = [1, 3, 2, 1, 2, 1]
         self._proj_weights = weights
         self._make_header(frame, headers, weights)
@@ -664,14 +664,12 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fetch completed and archived projects with timestamps
+            # Fetch completed and cancelled projects
             cursor.execute("""
-                SELECT project_id, name, client, status,
-                       IFNULL(archived_at, end_date) as archived_date
+                SELECT project_id, name, client, status, end_date
                 FROM projects 
                 WHERE status IN ('Completed', 'Cancelled')
-                   OR archived_at IS NOT NULL
-                ORDER BY IFNULL(archived_at, end_date) DESC
+                ORDER BY end_date DESC
             """)
                     
             rows = cursor.fetchall()
@@ -681,8 +679,8 @@ class MaintenanceView(ctk.CTkFrame):
                 return
 
             for i, row in enumerate(rows):
-                archived_ts = row["archived_date"].strftime("%Y-%m-%d %H:%M") if row["archived_date"] else "—"
-                vals = [str(row["project_id"]), row["name"], row["client"], row["status"], archived_ts, "Restore"]
+                end_date_str = row["end_date"].strftime("%Y-%m-%d") if row.get("end_date") else "—"
+                vals = [str(row["project_id"]), row["name"], row["client"], row["status"], end_date_str, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(self._proj_scroll, vals, self._proj_weights, bg)
                 
