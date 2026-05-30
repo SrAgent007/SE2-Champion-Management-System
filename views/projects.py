@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from database import get_connection, log_action
 from datetime import datetime
 import cv2
@@ -89,14 +89,37 @@ class ProjectsView(ctk.CTkFrame):
         ctk.CTkLabel(start_f, text="Start Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
         self.p_start = ctk.CTkEntry(start_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_start.pack(fill="x", pady=(5, 0))
+        self.p_start.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_start)) # ADDED FIX HERE
 
         end_f = ctk.CTkFrame(row_dates, fg_color="transparent")
         end_f.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         ctk.CTkLabel(end_f, text="End Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
         self.p_end = ctk.CTkEntry(end_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_end.pack(fill="x", pady=(5, 0))
+        self.p_end.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_end)) # ADDED FIX HERE
 
         ctk.CTkButton(form_card, text="Submit for Approval", height=40, fg_color="#1E4528", hover_color="#14301C", font=("Inter", 13, "bold"), command=self.save_project).pack(fill="x", padx=20, pady=(20, 20))
+
+    # --- THE DATE MASKING ENGINE FIX ---
+    def _format_date_mask(self, event, entry_widget):
+        if event.keysym in ('BackSpace', 'Delete', 'Left', 'Right', 'Up', 'Down', 'Tab'):
+            return
+            
+        text = entry_widget.get().replace('-', '')
+        if not text.isdigit() and text != "":
+            text = ''.join(filter(str.isdigit, text))
+            
+        formatted = ''
+        for i, char in enumerate(text[:8]):
+            if i == 4 or i == 6:
+                formatted += '-'
+            formatted += char
+            
+        current_val = entry_widget.get()
+        if current_val != formatted:
+            entry_widget.delete(0, 'end')
+            entry_widget.insert(0, formatted)
+    # -----------------------------------
 
     def _add_worker_from_entry(self):
         val = self.worker_single_entry.get().strip()
