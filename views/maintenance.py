@@ -480,8 +480,8 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Archived & Decommissioned Tools",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["Tool ID", "Name", "Category", "Condition", "Action"]
-        weights = [1, 3, 2, 2, 1]
+        headers = ["Tool ID", "Name", "Category", "Qty", "Archived At", "Action"]
+        weights = [1, 3, 2, 1, 2, 1]
         self._tools_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -495,7 +495,16 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT tool_id, name, category, `condition` FROM tool WHERE is_archived = 1")
+            # Fetch exact timestamps and include quantity_total from inventory
+            cursor.execute("""
+                SELECT t.tool_id, t.name, t.category, t.`condition`,
+                       IFNULL(t.archived_at, t.date_acquired) as archived_date,
+                       IFNULL(i.quantity_total, 0) as qty_total
+                FROM tool t
+                LEFT JOIN inventory i ON t.tool_id = i.tool_id
+                WHERE t.is_archived = 1
+                ORDER BY t.archived_at DESC
+            """)
             rows = cursor.fetchall()
             
             if not rows:
@@ -503,12 +512,13 @@ class MaintenanceView(ctk.CTkFrame):
                 return
 
             for i, row in enumerate(rows):
-                vals = [str(row["tool_id"]), row["name"], row["category"], row["condition"], "Restore"]
+                archived_ts = row["archived_date"].strftime("%Y-%m-%d %H:%M") if row["archived_date"] else "—"
+                vals = [str(row["tool_id"]), row["name"], row["category"], f"{row['qty_total']:g}", archived_ts, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(self._tools_scroll, vals, self._tools_weights, bg)
                 
                 for col, (val, w) in enumerate(zip(vals, self._tools_weights)):
-                    if col == 4:
+                    if col == 5:
                         btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
                                             command=lambda r=row["tool_id"]: self.restore_tool(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
@@ -556,8 +566,8 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Inactive / Archived Employees",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["User ID", "Employee ID", "Full Name", "Role", "Action"]
-        weights = [1, 2, 3, 2, 1]
+        headers = ["User ID", "Employee ID", "Full Name", "Role", "Archived At", "Action"]
+        weights = [1, 2, 3, 2, 2, 1]
         self._emp_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -571,7 +581,13 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT user_id, employee_id, full_name, role FROM user WHERE status != 'Active'")
+            # Fetch inactive employees with status change timestamps
+            cursor.execute("""
+                SELECT user_id, employee_id, full_name, role, status, updated_at
+                FROM user 
+                WHERE status != 'Active'
+                ORDER BY updated_at DESC
+            """)
             rows = cursor.fetchall()
             
             if not rows:
@@ -579,12 +595,13 @@ class MaintenanceView(ctk.CTkFrame):
                 return
 
             for i, row in enumerate(rows):
-                vals = [str(row["user_id"]), row["employee_id"], row["full_name"], row["role"], "Restore"]
+                updated_ts = row["updated_at"].strftime("%Y-%m-%d %H:%M") if row.get("updated_at") else "—"
+                vals = [str(row["user_id"]), row["employee_id"], row["full_name"], row["role"], updated_ts, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(self._emp_scroll, vals, self._emp_weights, bg)
                 
                 for col, (val, w) in enumerate(zip(vals, self._emp_weights)):
-                    if col == 4:
+                    if col == 5:
                         btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
                                             command=lambda r=row["user_id"]: self.restore_employee(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
@@ -632,8 +649,8 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Completed / Archived Projects",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["Project ID", "Project Name", "Client/Dept", "Status", "Action"]
-        weights = [1, 3, 2, 2, 1]
+        headers = ["Project ID", "Project Name", "Client/Dept", "Status", "Archived At", "Action"]
+        weights = [1, 3, 2, 1, 2, 1]
         self._proj_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -647,13 +664,15 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            try:
-                cursor.execute("SELECT project_id, project_name, client_name, status FROM project WHERE status IN ('Completed', 'Archived')")
-            except:
-                try:
-                    cursor.execute("SELECT project_id, project_name, client_name, status FROM projects WHERE status IN ('Completed', 'Archived')")
-                except:
-                    pass
+            # Fetch completed and archived projects with timestamps
+            cursor.execute("""
+                SELECT project_id, name, client, status,
+                       IFNULL(archived_at, end_date) as archived_date
+                FROM projects 
+                WHERE status IN ('Completed', 'Cancelled')
+                   OR archived_at IS NOT NULL
+                ORDER BY IFNULL(archived_at, end_date) DESC
+            """)
                     
             rows = cursor.fetchall()
             
@@ -662,12 +681,13 @@ class MaintenanceView(ctk.CTkFrame):
                 return
 
             for i, row in enumerate(rows):
-                vals = [str(row["project_id"]), row["project_name"], row["client_name"], row["status"], "Restore"]
+                archived_ts = row["archived_date"].strftime("%Y-%m-%d %H:%M") if row["archived_date"] else "—"
+                vals = [str(row["project_id"]), row["name"], row["client"], row["status"], archived_ts, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(self._proj_scroll, vals, self._proj_weights, bg)
                 
                 for col, (val, w) in enumerate(zip(vals, self._proj_weights)):
-                    if col == 4:
+                    if col == 5:
                         btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
                                             command=lambda r=row["project_id"]: self.restore_project(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
@@ -686,16 +706,14 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor()
-            try:
-                cursor.execute("UPDATE project SET status = 'Active' WHERE project_id = %s", (project_id,))
-            except:
-                cursor.execute("UPDATE projects SET status = 'Active' WHERE project_id = %s", (project_id,))
+            # Clear the archived_at timestamp to restore to active
+            cursor.execute("UPDATE projects SET status = 'Approved', archived_at = NULL WHERE project_id = %s", (project_id,))
             conn.commit()
             
             uid = self.user_info.get("user_id")
             if uid: log_action(uid, "Edited", "Maintenance", f"Restored Project ID: {project_id} from Archive")
             
-            messagebox.showinfo("Success", "Project marked as Active again.")
+            messagebox.showinfo("Success", "Project marked as Approved and restored from archive.")
             self.load_archived_projects()
         except Exception as e:
             messagebox.showerror("Error", str(e))

@@ -603,4 +603,36 @@ class ProjectsView(ctk.CTkFrame):
             ctk.CTkButton(btn_frame, text="Complete Project", fg_color="#27AE60", hover_color="#1E8449", font=("Inter", 11, "bold"), command=lambda: update_proj_status('Completed')).pack(side="left", padx=5)
         if raw_status in ['Pending', 'Approved', 'Ongoing'] and self.is_admin:
             ctk.CTkButton(btn_frame, text="Cancel", fg_color="#E74C3C", hover_color="#C0392B", font=("Inter", 11, "bold"), command=lambda: update_proj_status('Cancelled')).pack(side="left", padx=5)
+        if raw_status in ['Completed', 'Cancelled'] and self.is_admin:
+            ctk.CTkButton(btn_frame, text="Archive", fg_color="#95A5A6", hover_color="#7F8C8D", font=("Inter", 11, "bold"), command=lambda: self.archive_project(row['project_id'], row['name'], modal)).pack(side="left", padx=5)
         ctk.CTkButton(btn_frame, text="Close", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=modal.destroy).pack(side="right", padx=5)
+
+    def archive_project(self, project_id, project_name, modal):
+        """Archive a completed or cancelled project to the Maintenance module."""
+        if not messagebox.askyesno("Confirm Archive", f"Archive project '{project_name}' to the archive vault?\n\nIt will be moved to Maintenance > Archived Projects.", parent=modal):
+            return
+        
+        conn = get_connection()
+        if not conn:
+            return
+        
+        try:
+            cursor = conn.cursor()
+            # Add archived_at timestamp if column exists, otherwise just update status
+            cursor.execute("""ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL""")
+            cursor.execute("""UPDATE projects SET archived_at = NOW() WHERE project_id = %s""", (project_id,))
+            conn.commit()
+            
+            uid = self.user_info.get("user_id")
+            if uid:
+                log_action(uid, "Archived", "Projects", f"Archived project '{project_name}' (PID: {project_id})")
+            
+            messagebox.showinfo("Archived", f"Project '{project_name}' has been archived and moved to the Maintenance module.", parent=modal)
+            modal.destroy()
+            self.load_projects()
+        except Exception as e:
+            messagebox.showerror("Database Error", str(e), parent=modal)
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
