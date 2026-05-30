@@ -3,7 +3,7 @@ import shutil
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw, ImageFont
-from database import get_connection
+from database import get_connection, generate_id_badge
 import re
 import bcrypt
 import qrcode
@@ -68,47 +68,11 @@ class ProfileView(ctk.CTkFrame):
 
     def print_id_badge(self):
         try:
-            emp_id = str(self.user_info['employee_id'])
+            emp_id = self.user_info['employee_id']
             emp_name = self.user_info['full_name']
             emp_role = self.user_info['role']
 
-            qr = qrcode.QRCode(version=1, box_size=15, border=2)
-            qr.add_data(emp_id)
-            qr.make(fit=True)
-            qr_img = qr.make_image(
-                fill_color="black", back_color="white").convert("RGB")
-
-            canvas_width = 400
-            canvas_height = qr_img.height + 200
-            canvas = Image.new('RGB', (canvas_width, canvas_height), 'white')
-
-            offset_x = (canvas_width - qr_img.width) // 2
-            canvas.paste(qr_img, (offset_x, 20))
-
-            draw = ImageDraw.Draw(canvas)
-            try:
-                font_name = ImageFont.truetype("arialbd.ttf", 30)
-                font_role = ImageFont.truetype("arial.ttf", 20)
-                font_id = ImageFont.truetype("arial.ttf", 18)
-            except IOError:
-                font_name = font_role = font_id = ImageFont.load_default()
-
-            def get_text_x(text, font):
-                bbox = draw.textbbox((0, 0), text, font=font)
-                return (canvas_width - (bbox[2] - bbox[0])) // 2
-
-            y_start = qr_img.height + 40
-            draw.text((get_text_x(emp_name, font_name), y_start),
-                      emp_name, fill="black", font=font_name)
-            draw.text((get_text_x(emp_role, font_role), y_start + 45),
-                      emp_role, fill="#1E4528", font=font_role)
-            draw.text((get_text_x(f"ID: {emp_id}", font_id), y_start + 75),
-                      f"ID: {emp_id}", fill="gray", font=font_id)
-
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            file_path = os.path.join(temp_dir, f"ID_Badge_{emp_id}.pdf")
-            canvas.save(file_path, "PDF", resolution=100.0)
+            file_path = generate_id_badge(emp_id, emp_name, emp_role)
             os.startfile(file_path)
 
         except Exception as e:

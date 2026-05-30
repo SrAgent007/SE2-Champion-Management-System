@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
-from database import get_connection
+from database import get_connection, generate_id_badge
 import bcrypt
 import secrets
 import os
@@ -436,68 +436,12 @@ class RoleManagementView(ctk.CTkFrame):
 
     def print_user_badge(self, row):
         try:
-            emp_id   = str(row["employee_id"])
+            emp_id = row["employee_id"]
             emp_name = row["full_name"]
             emp_role = row["role"]
 
-            # Generate QR code
-            qr = qrcode.QRCode(version=1, box_size=14, border=2)
-            qr.add_data(emp_id)
-            qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="#1E4528", back_color="white").convert("RGB")
-
-            # Canvas
-            W = 420
-            H = qr_img.height + 220
-            canvas = Image.new("RGB", (W, H), "white")
-
-            # Header band
-            draw_bg = ImageDraw.Draw(canvas)
-            draw_bg.rectangle([(0, 0), (W, 50)], fill="#1E4528")
-
-            # Paste QR centred below header
-            qr_x = (W - qr_img.width) // 2
-            canvas.paste(qr_img, (qr_x, 60))
-
-            draw = ImageDraw.Draw(canvas)
-
-            # Fonts — try Windows system fonts, fall back gracefully
-            fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
-            def _font(filename, size):
-                for path in [os.path.join(fonts_dir, filename), filename]:
-                    try:
-                        return ImageFont.truetype(path, size)
-                    except (IOError, OSError):
-                        continue
-                try:
-                    return ImageFont.load_default(size=size)
-                except TypeError:
-                    return ImageFont.load_default()
-
-            f_company = _font("arialbd.ttf", 16)
-            f_name    = _font("arialbd.ttf", 28)
-            f_role    = _font("arial.ttf",   18)
-            f_id      = _font("arial.ttf",   14)
-
-            def cx(text, font):
-                bbox = draw.textbbox((0, 0), text, font=font)
-                return (W - (bbox[2] - bbox[0])) // 2
-
-            # Header text
-            draw.text((cx("Champion Fine Tooling Corp.", f_company), 14),
-                      "Champion Fine Tooling Corp.", fill="white", font=f_company)
-
-            # Employee info below QR
-            y = qr_img.height + 75
-            draw.text((cx(emp_name, f_name), y),     emp_name, fill="#1A1A1A", font=f_name)
-            draw.text((cx(emp_role, f_role), y + 42), emp_role, fill="#1E4528", font=f_role)
-            draw.text((cx(f"ID: {emp_id}", f_id), y + 76),
-                      f"ID: {emp_id}", fill="gray", font=f_id)
-
-            # Save & open
-            path = os.path.join(tempfile.gettempdir(), f"Badge_{emp_id}.pdf")
-            canvas.save(path, "PDF", resolution=150.0)
-            os.startfile(path)
+            file_path = generate_id_badge(emp_id, emp_name, emp_role)
+            os.startfile(file_path)
 
         except Exception as e:
             messagebox.showerror("Badge Error", f"Could not generate badge:\n{e}",
