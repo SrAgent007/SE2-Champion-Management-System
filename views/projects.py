@@ -13,22 +13,61 @@ class ProjectsView(ctk.CTkFrame):
         self.is_admin = self.user_info.get("role", "Staff") == "Admin"
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        self.inner = ctk.CTkFrame(self, fg_color="transparent")
-        self.inner.grid(row=0, column=0, sticky="nsew")
-        self.inner.grid_columnconfigure(0, weight=1, minsize=380)
-        self.inner.grid_columnconfigure(1, weight=2, minsize=600)
-        self.inner.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0) 
+        self.grid_rowconfigure(1, weight=1) 
 
         self.req_cart = []
-        self.build_form_panel()
-        self.build_table_panel()
+        
+        # Ensure the column exists before the table tries to query it
+        self._ensure_archive_column()
+
+        self.build_top_tabs()
 
         uid = self.user_info.get("user_id")
         if uid:
             log_action(uid, "Viewed", "Projects", "Opened Project Management module")
-            
+
+    def _ensure_archive_column(self):
+        conn = get_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(*) FROM information_schema.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'archived_at'
+                """)
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("ALTER TABLE projects ADD COLUMN archived_at TIMESTAMP NULL")
+                conn.commit()
+            except Exception as e:
+                print(f"Archive column check skipped: {e}")
+            finally:
+                conn.close()
+
+    def build_top_tabs(self):
+        top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
+
+        ctk.CTkLabel(top_bar, text="Project Management", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
+
+        tabs = ["📋 Active Projects"]
+        self.tab_var = ctk.StringVar(value=tabs[0])
+
+        self.seg_btn = ctk.CTkSegmentedButton(
+            top_bar, values=tabs, variable=self.tab_var,
+            fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
+        )
+        self.seg_btn.pack(side="right")
+
+        self.inner = ctk.CTkFrame(self, fg_color="transparent")
+        self.inner.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
+        self.inner.grid_columnconfigure(0, weight=1, minsize=380) 
+        self.inner.grid_columnconfigure(1, weight=2, minsize=600) 
+        self.inner.grid_rowconfigure(0, weight=1)
+
+        self.build_form_panel()
+        self.build_table_panel()
+        
         self.p_name.focus_set()
 
     def build_form_panel(self):
@@ -60,8 +99,7 @@ class ProjectsView(ctk.CTkFrame):
 
         self.worker_single_entry = ctk.CTkEntry(worker_input_row, placeholder_text="Employee ID or name...", takefocus=True)
         self.worker_single_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        self.worker_single_entry.bind("<Return>", lambda e: self._add_worker_from_entry())
-
+        
         ctk.CTkButton(worker_input_row, text="+ Add", width=55, height=32, fg_color="#1E4528", hover_color="#14301C", font=("Inter", 11, "bold"), command=self._add_worker_from_entry).pack(side="left", padx=(0, 5))
         ctk.CTkButton(worker_input_row, text="📷 Scan", width=65, height=32, fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 11, "bold"), command=self.scan_worker).pack(side="left")
 
@@ -89,18 +127,25 @@ class ProjectsView(ctk.CTkFrame):
         ctk.CTkLabel(start_f, text="Start Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
         self.p_start = ctk.CTkEntry(start_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_start.pack(fill="x", pady=(5, 0))
-        self.p_start.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_start)) # ADDED FIX HERE
+        self.p_start.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_start))
 
         end_f = ctk.CTkFrame(row_dates, fg_color="transparent")
         end_f.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         ctk.CTkLabel(end_f, text="End Date", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
         self.p_end = ctk.CTkEntry(end_f, placeholder_text="YYYY-MM-DD", takefocus=True)
         self.p_end.pack(fill="x", pady=(5, 0))
-        self.p_end.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_end)) # ADDED FIX HERE
+        self.p_end.bind("<KeyRelease>", lambda e: self._format_date_mask(e, self.p_end)) 
+
+        self.p_name.bind("<Return>", lambda e: self.p_head.focus_set()) 
+        self.p_head.bind("<Return>", lambda e: self.p_client.focus_set())
+        self.p_client.bind("<Return>", lambda e: self.p_location.focus_set())
+        self.p_location.bind("<Return>", lambda e: self.worker_single_entry.focus_set())
+        self.worker_single_entry.bind("<Return>", lambda e: [self._add_worker_from_entry(), self.worker_single_entry.focus_set()])
+        self.p_start.bind("<Return>", lambda e: self.p_end.focus_set())
+        self.p_end.bind("<Return>", lambda e: self.save_project())
 
         ctk.CTkButton(form_card, text="Submit for Approval", height=40, fg_color="#1E4528", hover_color="#14301C", font=("Inter", 13, "bold"), command=self.save_project).pack(fill="x", padx=20, pady=(20, 20))
 
-    # --- THE DATE MASKING ENGINE FIX ---
     def _format_date_mask(self, event, entry_widget):
         if event.keysym in ('BackSpace', 'Delete', 'Left', 'Right', 'Up', 'Down', 'Tab'):
             return
@@ -119,7 +164,6 @@ class ProjectsView(ctk.CTkFrame):
         if current_val != formatted:
             entry_widget.delete(0, 'end')
             entry_widget.insert(0, formatted)
-    # -----------------------------------
 
     def _add_worker_from_entry(self):
         val = self.worker_single_entry.get().strip()
@@ -179,6 +223,8 @@ class ProjectsView(ctk.CTkFrame):
 
         search_name.bind("<Return>", lambda e: do_search())
         search_pid.bind("<Return>", lambda e: do_search())
+        
+        search_name.focus_set()
 
         hdr = ctk.CTkFrame(modal, fg_color="#1E4528", height=40, corner_radius=5)
         hdr.pack(fill="x", padx=(20, 36))
@@ -238,6 +284,9 @@ class ProjectsView(ctk.CTkFrame):
 
                     qty_entry = ctk.CTkEntry(rf, width=55, height=26, takefocus=True)
                     qty_entry.grid(row=0, column=5, padx=5, pady=8, sticky="w")
+                    
+                    qty_entry.bind("<Return>", lambda e, r=row, q_e=qty_entry: self.add_from_catalog(r, q_e, modal))
+                    
                     ctk.CTkButton(rf, text="+ Add", width=55, height=26, fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 10, "bold"), command=lambda r=row, q_e=qty_entry: self.add_from_catalog(r, q_e, modal)).grid(row=0, column=6, padx=5, pady=8, sticky="w")
 
                 if not list_scroll.winfo_children():
@@ -398,6 +447,7 @@ class ProjectsView(ctk.CTkFrame):
             self.refresh_req_cart()
             self.editing_project_id = None; self.editing_project_status = None
             self.load_projects()
+            self.p_name.focus_set()
 
         except Exception as e: messagebox.showerror("DB Error", str(e), parent=self.winfo_toplevel())
         finally:
@@ -441,6 +491,7 @@ class ProjectsView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
+            # --- BUG FIX: Added WHERE p.archived_at IS NULL to hide it from active list ---
             sql = '''
                 SELECT p.*, a.full_name as admin_approver,
                        CASE 
@@ -449,10 +500,11 @@ class ProjectsView(ctk.CTkFrame):
                        END as display_status
                 FROM projects p
                 LEFT JOIN user a ON p.approved_by = a.user_id
+                WHERE p.archived_at IS NULL
             '''
             params = []
             if search_q:
-                sql += " WHERE p.name LIKE %s OR p.client LIKE %s OR p.project_head LIKE %s"
+                sql += " AND (p.name LIKE %s OR p.client LIKE %s OR p.project_head LIKE %s)"
                 params = [f"%{search_q}%", f"%{search_q}%", f"%{search_q}%"]
                 
             sql += " ORDER BY p.project_id DESC"
@@ -591,6 +643,7 @@ class ProjectsView(ctk.CTkFrame):
             
             modal.destroy()
             messagebox.showinfo("Edit Mode", "Project data loaded into the draft form.\nThe Submit button will now update this project.", parent=self.winfo_toplevel())
+            self.p_name.focus_set()
 
         raw_status = row['status'].replace(' (OVERDUE)', '')
         if raw_status in ['Pending', 'Approved']:
@@ -608,7 +661,6 @@ class ProjectsView(ctk.CTkFrame):
         ctk.CTkButton(btn_frame, text="Close", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=modal.destroy).pack(side="right", padx=5)
 
     def archive_project(self, project_id, project_name, modal):
-        """Archive a completed or cancelled project to the Maintenance module."""
         if not messagebox.askyesno("Confirm Archive", f"Archive project '{project_name}' to the archive vault?\n\nIt will be moved to Maintenance > Archived Projects.", parent=modal):
             return
         
@@ -618,8 +670,6 @@ class ProjectsView(ctk.CTkFrame):
         
         try:
             cursor = conn.cursor()
-            # Add archived_at timestamp if column exists, otherwise just update status
-            cursor.execute("""ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL""")
             cursor.execute("""UPDATE projects SET archived_at = NOW() WHERE project_id = %s""", (project_id,))
             conn.commit()
             

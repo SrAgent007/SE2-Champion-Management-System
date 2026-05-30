@@ -8,25 +8,60 @@ class InventoryView(ctk.CTkFrame):
 
         self.user_info = user_info or {}
 
-        self.scroll_wrapper = ctk.CTkFrame(self, fg_color="transparent")
-        self.scroll_wrapper.pack(fill="both", expand=True)
+        # 1. Global UI Fix: Apply hierarchy (Static main wrapper)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0) # Top Bar
+        self.grid_rowconfigure(1, weight=1) # Content Area
 
         self.tool_hash_table = {}
 
-        self.build_left_form()
-        self.build_right_table()
+        self.build_top_tabs()
+
+    def build_top_tabs(self):
+        # 2. Global UI Fix: Top Segmented Tabs
+        top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
+
+        ctk.CTkLabel(top_bar, text="Products / Inventory", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
+
+        tabs = ["📦 Active Inventory", "🗄️ Archived Items"]
+        self.tab_var = ctk.StringVar(value=tabs[0])
+
+        self.seg_btn = ctk.CTkSegmentedButton(
+            top_bar, values=tabs, variable=self.tab_var, command=self.switch_tab,
+            fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
+        )
+        self.seg_btn.pack(side="right")
+
+        # 3. Global UI Fix: Scrollable content area mapping
+        self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
+        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
+        # 4. Global UI Fix: Standardize column weights so panels extend fully
+        self.tab_content.grid_columnconfigure(0, weight=1, minsize=380) # Left Form
+        self.tab_content.grid_columnconfigure(1, weight=2, minsize=600) # Right Table
+        self.tab_content.grid_rowconfigure(0, weight=1)
+
+        self.switch_tab(tabs[0])
+
+    def switch_tab(self, selected_tab):
+        for widget in self.tab_content.winfo_children():
+            widget.destroy()
+
+        self.build_left_form(self.tab_content)
+        self.build_right_table(self.tab_content)
         self.load_inventory_data()
         self.load_dynamic_dropdowns() 
-        
         self.name_entry.focus_set()
 
-    def build_left_form(self):
-        form_frame = ctk.CTkScrollableFrame(self.scroll_wrapper, fg_color="white", corner_radius=10, width=320)
-        form_frame.pack(side="left", fill="y", padx=(0, 10), pady=0)
+    def build_left_form(self, parent):
+        form_card = ctk.CTkScrollableFrame(parent, fg_color="white", corner_radius=10, width=380)
+        form_card.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
-        ctk.CTkLabel(form_frame, text="Add New Item", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(20, 10))
+        tab_state = "Archived" if "Archived" in self.tab_var.get() else "Active"
+        
+        ctk.CTkLabel(form_card, text="Add New Item", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(20, 10))
 
-        row_type = ctk.CTkFrame(form_frame, fg_color="transparent")
+        row_type = ctk.CTkFrame(form_card, fg_color="transparent")
         row_type.pack(fill="x", padx=20, pady=(5, 10))
         row_type.grid_columnconfigure(0, weight=1)
         row_type.grid_columnconfigure(1, weight=1)
@@ -43,25 +78,25 @@ class InventoryView(ctk.CTkFrame):
         self.uom_menu = ctk.CTkOptionMenu(uom_frame, values=["pcs", "boxes", "sets", "kg", "rolls", "packs", "liters", "meters", "feet"], fg_color="#E8F8F5", text_color="black")
         self.uom_menu.pack(fill="x", pady=(5, 0))
 
-        ctk.CTkLabel(form_frame, text="💡 Consumables (e.g. boxes of nails) support fractional returns. (e.g., return 0.5 for half box).", font=("Inter", 10), text_color="gray", justify="left", wraplength=270).pack(anchor="w", padx=20, pady=(0, 10))
+        ctk.CTkLabel(form_card, text="💡 Consumables (e.g. boxes of nails) support fractional returns. (e.g., return 0.5 for half box).", font=("Inter", 10), text_color="gray", justify="left", wraplength=270).pack(anchor="w", padx=20, pady=(0, 10))
 
-        ctk.CTkLabel(form_frame, text="Product Name *", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.name_entry = ctk.CTkEntry(form_frame, placeholder_text="e.g., #2 Nails (Box)")
+        ctk.CTkLabel(form_card, text="Product Name *", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+        self.name_entry = ctk.CTkEntry(form_card, placeholder_text="e.g., #2 Nails (Box)")
         self.name_entry.pack(fill="x", padx=20, pady=(5, 10))
 
-        ctk.CTkLabel(form_frame, text="Description", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.desc_entry = ctk.CTkEntry(form_frame, placeholder_text="Brief details about the item...")
+        ctk.CTkLabel(form_card, text="Description", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+        self.desc_entry = ctk.CTkEntry(form_card, placeholder_text="Brief details about the item...")
         self.desc_entry.pack(fill="x", padx=20, pady=(5, 10))
 
-        ctk.CTkLabel(form_frame, text="Category", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.cat_menu = ctk.CTkComboBox(form_frame, values=["Loading..."], fg_color="#F9FAFB", text_color="black")
+        ctk.CTkLabel(form_card, text="Category", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+        self.cat_menu = ctk.CTkComboBox(form_card, values=["Loading..."], fg_color="#F9FAFB", text_color="black")
         self.cat_menu.pack(fill="x", padx=20, pady=(5, 10))
 
-        ctk.CTkLabel(form_frame, text="Supplier", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.sup_menu = ctk.CTkComboBox(form_frame, values=["Loading..."], fg_color="#F9FAFB", text_color="black")
+        ctk.CTkLabel(form_card, text="Supplier", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+        self.sup_menu = ctk.CTkComboBox(form_card, values=["Loading..."], fg_color="#F9FAFB", text_color="black")
         self.sup_menu.pack(fill="x", padx=20, pady=(5, 10))
 
-        row_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+        row_frame = ctk.CTkFrame(form_card, fg_color="transparent")
         row_frame.pack(fill="x", padx=20, pady=(5, 10))
         row_frame.grid_columnconfigure(0, weight=1)
         row_frame.grid_columnconfigure(1, weight=1)
@@ -78,16 +113,28 @@ class InventoryView(ctk.CTkFrame):
         self.qty_entry = ctk.CTkEntry(q_frame, placeholder_text="0")
         self.qty_entry.pack(fill="x", pady=(5, 0))
 
-        ctk.CTkLabel(form_frame, text="Storage Location", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
-        self.loc_entry = ctk.CTkEntry(form_frame, placeholder_text="e.g., Shelf A1")
+        ctk.CTkLabel(form_card, text="Storage Location", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
+        self.loc_entry = ctk.CTkEntry(form_card, placeholder_text="e.g., Shelf A1")
         self.loc_entry.pack(fill="x", padx=20, pady=(5, 15))
 
-        btn_row = ctk.CTkFrame(form_frame, fg_color="transparent")
+        # 5. Global UI Fix: Keyboard Traversal injected!
+        self.name_entry.bind("<Return>", lambda e: self.desc_entry.focus_set())
+        self.desc_entry.bind("<Return>", lambda e: self.price_entry.focus_set())
+        self.price_entry.bind("<Return>", lambda e: self.qty_entry.focus_set())
+        self.qty_entry.bind("<Return>", lambda e: self.loc_entry.focus_set())
+        self.loc_entry.bind("<Return>", lambda e: self.validate_and_save())
+
+        btn_row = ctk.CTkFrame(form_card, fg_color="transparent")
         btn_row.pack(fill="x", padx=20, pady=(10, 20))
         btn_row.grid_columnconfigure((0, 1), weight=1)
 
         ctk.CTkButton(btn_row, text="Save Item", fg_color="#1E4528", hover_color="#14301C", font=("Inter", 12, "bold"), command=self.validate_and_save).grid(row=0, column=0, padx=(0, 5), sticky="ew")
         ctk.CTkButton(btn_row, text="Clear", fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 12, "bold"), command=self.clear_form).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+
+        if tab_state == "Archived":
+            # Optional: Dim out controls when looking at archived to guide UX
+            for widget in [self.name_entry, self.desc_entry, self.price_entry, self.qty_entry, self.loc_entry, self.cat_menu, self.sup_menu]:
+                widget.configure(state="disabled")
 
     def load_dynamic_dropdowns(self):
         conn = get_connection()
@@ -113,11 +160,11 @@ class InventoryView(ctk.CTkFrame):
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
-    def build_right_table(self):
-        table_frame = ctk.CTkFrame(self.scroll_wrapper, fg_color="white", corner_radius=10)
-        table_frame.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=0)
+    def build_right_table(self, parent):
+        table_card = ctk.CTkFrame(parent, fg_color="white", corner_radius=10)
+        table_card.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
 
-        search_frame = ctk.CTkFrame(table_frame, fg_color="transparent")
+        search_frame = ctk.CTkFrame(table_card, fg_color="transparent")
         search_frame.pack(fill="x", padx=20, pady=(20, 10))
 
         self.filter_menu = ctk.CTkOptionMenu(search_frame, values=["All Fields", "By: PID", "By: Name", "By: Type", "By: Supplier"], width=150, fg_color="#F9FAFB", text_color="black")
@@ -133,7 +180,7 @@ class InventoryView(ctk.CTkFrame):
         self.reset_btn = ctk.CTkButton(search_frame, text="↻ Reset", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=self.reset_search)
         self.reset_btn.pack(side="left", padx=(0, 0))
 
-        header_frame = ctk.CTkFrame(table_frame, fg_color="#1E4528", corner_radius=5, height=40)
+        header_frame = ctk.CTkFrame(table_card, fg_color="#1E4528", corner_radius=5, height=40)
         header_frame.pack(fill="x", padx=(20, 36))
         header_frame.pack_propagate(False)
 
@@ -144,13 +191,16 @@ class InventoryView(ctk.CTkFrame):
             header_frame.grid_columnconfigure(col, weight=weight)
             ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
 
-        self.data_scroll = ctk.CTkScrollableFrame(table_frame, fg_color="transparent")
+        self.data_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
 
     def load_inventory_data(self, query="", filter_type="All Fields"):
         for widget in self.data_scroll.winfo_children():
             widget.destroy()
         self.tool_hash_table.clear()
+
+        # Check which tab we're on to modify logic
+        is_archived = 1 if "Archived" in self.tab_var.get() else 0
 
         conn = get_connection()
         if not conn:
@@ -172,9 +222,10 @@ class InventoryView(ctk.CTkFrame):
                         WHERE tr.tool_id = t.tool_id AND tr.status = 'Active' 
                         LIMIT 1) as active_project
                 FROM tool t LEFT JOIN inventory i ON t.tool_id = i.tool_id
-                WHERE t.is_archived = 0
+                WHERE t.is_archived = %s
             """
-            params = []
+            params = [is_archived]
+            
             if query:
                 if filter_type == "All Fields":
                     base_query += " AND (t.name LIKE %s OR t.tool_id LIKE %s OR t.category LIKE %s OR t.item_type LIKE %s OR t.supplier LIKE %s)"
@@ -305,6 +356,8 @@ class InventoryView(ctk.CTkFrame):
     def open_tool_modal(self, lookup_id):
         data = self.tool_hash_table.get(lookup_id)
         if not data: return
+        
+        is_arch = 1 if "Archived" in self.tab_var.get() else 0
 
         modal = ctk.CTkToplevel(self)
         modal.title(f"Manage Item: {lookup_id}")
@@ -398,22 +451,44 @@ class InventoryView(ctk.CTkFrame):
                     if conn.is_connected(): cursor.close(); conn.close()
 
         def execute_archive():
-            if messagebox.askyesno("Confirm", "Archive this item? It will be hidden from active inventory.", parent=modal):
+            if is_arch:
+                msg = "Restore this item to active inventory?"
+                new_state = 0
+            else:
+                msg = "Archive this item? It will be hidden from active inventory."
+                new_state = 1
+                
+            if messagebox.askyesno("Confirm", msg, parent=modal):
                 conn = get_connection()
                 if conn:
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE tool SET is_archived=1, archived_at=NOW() WHERE tool_id=%s", (lookup_id,))
+                    cursor.execute("UPDATE tool SET is_archived=%s, archived_at=NOW() WHERE tool_id=%s", (new_state, lookup_id))
                     conn.commit()
                     cursor.close(); conn.close()
+                    
                     uid = self.user_info.get("user_id")
-                    if uid: log_action(uid, "Archived", "Inventory", f"Archived item '{data['name']}'")
+                    action_str = "Restored" if new_state == 0 else "Archived"
+                    if uid: log_action(uid, action_str, "Inventory", f"{action_str} item '{data['name']}'")
+                    
                     modal.destroy()
                     self.load_inventory_data()
 
+        # Modal Focus Traversal
+        name_entry.bind("<Return>", lambda e: desc_entry.focus_set())
+        desc_entry.bind("<Return>", lambda e: cat_entry.focus_set())
+        cat_entry.bind("<Return>", lambda e: sup_entry.focus_set())
+        sup_entry.bind("<Return>", lambda e: qty_entry.focus_set())
+        qty_entry.bind("<Return>", lambda e: loc_entry.focus_set())
+        loc_entry.bind("<Return>", lambda e: execute_update())
+
         btn_row = ctk.CTkFrame(modal, fg_color="transparent")
         btn_row.pack(side="bottom", fill="x", padx=25, pady=15)
+        
         ctk.CTkButton(btn_row, text="Update", fg_color="#F1C40F", text_color="black", hover_color="#D4AC0D", font=("Inter", 11, "bold"), command=execute_update).pack(side="left", padx=5)
-        ctk.CTkButton(btn_row, text="Archive", fg_color="#D3B8A7", text_color="black", hover_color="#BFA595", font=("Inter", 11, "bold"), command=execute_archive).pack(side="left", padx=5)
+        
+        arch_btn_text = "Restore" if is_arch else "Archive"
+        ctk.CTkButton(btn_row, text=arch_btn_text, fg_color="#D3B8A7", text_color="black", hover_color="#BFA595", font=("Inter", 11, "bold"), command=execute_archive).pack(side="left", padx=5)
+        
         ctk.CTkButton(btn_row, text="Close", fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=modal.destroy).pack(side="right", padx=5)
 
     def clear_form(self):

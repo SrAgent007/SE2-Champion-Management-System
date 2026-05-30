@@ -7,113 +7,91 @@ class HelpView(ctk.CTkFrame):
     """
     Help Module — Figure 4 in the procedural flowchart.
     Provides Help Guide, FAQs, and System Requirements.
-    Keyword search uses a linear scan (O(n)) over section/FAQ text,
-    consistent with the system's simplicity goals documented in Chapter 3.
+    Keyword search uses a linear scan (O(n)) over section/FAQ text.
     Admin-only sections are hidden from Staff users.
     """
 
     # Sections tagged True are shown only to Admins
     GUIDE_SECTIONS = [
-        (False, "1. Logging In", [
+        (False, "1. Logging In & System Roles", [
             "Enter your Employee ID (username) and password on the login screen.",
-            "Click 'Login' or press Enter. Your role (Admin or Staff) determines which modules are accessible.",
-            "After 3 failed attempts the system will prompt you to reset your password.",
-            "Use 'Forgot Username?' or 'Forgot Password?' links if needed.",
+            "The system recognizes three operational tiers: Admin, Staff, and Worker.",
+            "Admins have full approval and maintenance access. Staff manage daily transactions. Workers are field personnel assigned to projects who receive tool deployments.",
+            "Use 'Forgot Password?' to reset your credentials via email verification.",
         ]),
         (False, "2. Dashboard", [
-            "The Dashboard shows live metrics: unique tool profiles, total physical items, borrowed items, and registered employees.",
-            "The 'Recent Activity' table shows the last 5 system events across all modules.",
-            "The 'Tool Condition Metrics' bar chart gives a quick visual health snapshot.",
+            "The Dashboard shows live metrics: total inventory, active deployments, and system users.",
+            "The 'Recent Activity' table provides a live feed of the latest system events.",
+            "The 'Tool Condition Metrics' bar chart gives a quick visual health snapshot of the company's assets.",
         ]),
         (True, "3. Products / Inventory (Admin)", [
-            "Use the left form to add a new tool: select Category, Supplier, enter Name, optional Price, Quantity, Location, and Status.",
-            "Click any row in the table to open the Edit/Archive modal for that tool.",
-            "Use the Search bar to filter by any field. Sort by Newest, Oldest, or Name.",
-            "'Archive' hides a tool from active inventory without deleting its history.",
+            "Use the left form to register new tools or consumables into the system.",
+            "Consumables (e.g., boxes of nails) support fractional quantities (e.g., 0.5 boxes).",
+            "Click any row in the table to open the Edit/Archive modal.",
+            "'Archive' safely removes a tool from the active list and moves it to the Centralized Archive in Maintenance.",
         ]),
-        (False, "4. Products / Inventory (Staff — View Only)", [
-            "Staff can view, search, and sort the tool list but cannot add, edit, or archive.",
+        (False, "4. Project Management (Requisition Workflow)", [
+            "Step 1 (Drafting): Enter the client, site location, and schedule to create a Project Plan.",
+            "Step 2 (Worker Assignment): Assign Workers to the project by scanning their Employee ID or typing it manually.",
+            "Step 3 (Requisition): Click 'Browse Inventory Catalog' to add the required tools to the project's cart.",
+            "Step 4 (Approval): Submit the plan. Tools CANNOT be deployed until an Admin changes the status to 'Approved'."
         ]),
-        (False, "5. Tagging", [
-            "Click any tool row to open the Tag Manager for that tool.",
-            "Enter or scan a Tag ID, or click '↻ Auto-Gen' to generate a smart tag based on Category and Supplier.",
-            "Click 'Save Tag Link to Database' to assign the tag.",
-            "The live QR preview updates as you type. Click '⎙ Generate Print File' to produce a printable PDF label.",
-            "Use '📷 Scan & Test QR' to verify any existing tag with your webcam.",
+        (False, "5. Tool Issuance (Deployment)", [
+            "Tools are strictly tied to approved projects. You cannot arbitrarily borrow a tool.",
+            "1. Scan the assigned Worker's Employee ID to authenticate them.",
+            "2. Select the specific Project they are deploying for.",
+            "3. Scan the exact Tool Tags required. The system will block items that were not approved in the Project Requisition.",
+            "4. Issue the tools and generate the deployment receipt."
         ]),
-        (False, "6. Borrowing & Return", [
-            "BORROW: Scan Employee ID → verify → scan tool Tag ID(s) to add to cart → enter Purpose → click 'Confirm Borrow'. A receipt PDF is generated.",
-            "RETURN: Scan Employee ID → verify → scan Tool Tag or enter TRN number from receipt → set condition and quantity → click 'Confirm Return'.",
-            "The Transaction History table shows the last 50 grouped transactions.",
+        (False, "6. Tool Retrieval", [
+            "To retrieve a deployed tool, scan the returning Worker's ID.",
+            "Scan the Tool Tag (or type the TRN from the receipt).",
+            "Record the return condition (Good, Damaged, Lost) and quantity to restock the central inventory."
         ]),
         (True, "7. Tracking & Accountability (Admin)", [
-            "Borrow/Return Logs: Full list of every individual transaction.",
-            "Audit Records: Filter by status (Active/Returned) and run comparisons to detect discrepancies.",
-            "Manage Issues: Flag tools for review with condition and notes. Click any issue row to resolve it and sync the tool's condition.",
+            "Borrow/Return Logs: A chronological history of every physical tool movement.",
+            "Audit Records: Filter by 'Active' or 'Returned' to detect discrepancies in site deployments.",
+            "Activity Log: Tracks every login, edit, and search performed by any user in the system.",
         ]),
-        (False, "8. Tracking & Accountability (Staff)", [
-            "Staff see only their own personal borrowing and return history.",
+        (False, "8. Reports", [
+            "ABC Analysis: Categorizes tools by deployment frequency (A = top 20% high usage, B = middle, C = rarely used).",
+            "Tool Usage Report: Shows total lifetime deployments and current available stock.",
+            "Employee Activity: Tracks accountability by showing active item counts per worker.",
         ]),
-        (False, "9. Reports", [
-            "ABC Analysis: Categorizes tools by borrowing frequency using the Pareto principle (A = top 70%, B = next 20%, C = bottom 10%).",
-            "Tool Usage Report: Shows each tool's total borrows, current checkouts, and available stock.",
-            "Employee Activity: Summarizes per-employee borrow counts and active items.",
-            "All three tabs have an '⎙ Export PDF' button.",
+        (True, "9. Maintenance & Centralized Archive (Admin Only)", [
+            "Data Backups: Select specific tables to export a secure JSON backup file.",
+            "Data Restoration: Upload a JSON backup to restore previous database states.",
+            "Centralized Archive: Contains two vaults — 'Archived Tools' (retired/broken equipment) and 'Archived Projects' (completed/cancelled sites).",
         ]),
-        (True, "10. Maintenance (Admin Only)", [
-            "Backup: Select tables and save a timestamped JSON backup file.",
-            "Restore: Load a previous JSON backup to overwrite matching records.",
-            "Archived Tools: View, restore, or permanently delete archived tools.",
+        (True, "10. Role Management (Admin Only)", [
+            "Register new user accounts (Admins, Staff, or Workers) via the left panel.",
+            "Click 'Edit' on any user row to update their Role or force a Password Reset.",
         ]),
-        (True, "11. Role Management (Admin Only)", [
-            "Register new users with Employee ID, Full Name, Email, Role, and Password.",
-            "View all registered accounts in the table on the right.",
-            "Click 'Edit' to update name, email, role, or reset a user's password.",
-            "Click 'Delete' to remove an account (transaction history is preserved).",
-        ]),
-        (False, "12. Profile", [
-            "View and edit your Full Name and Email.",
-            "Change your password via the 'Change Password' button (requires current password for verification).",
-            "Click your profile picture to upload a new one.",
-            "Click '⎙ Print My ID QR Badge' to generate a scannable employee ID card.",
-            "The 'My Borrowing History' section shows your personal transaction records.",
+        (False, "11. Profile", [
+            "View and edit your Full Name and Email address.",
+            "Update your password securely.",
+            "Click your profile picture to upload a new avatar.",
+            "Click '⎙ Print My ID QR Badge' to generate your scannable Employee ID card."
         ]),
     ]
 
     FAQS = [
-        (False, "I scanned my QR code but the scanner didn't detect it. What do I do?",
-         "Ensure the QR code is well-lit and held steady inside the green targeting box. "
-         "If the code is a printed label, make sure it isn't crumpled or smudged. "
-         "You can also manually type the Tag ID into the entry field and press Enter."),
-        (False, "Why can't I see the 'Add Tool' form in the Inventory module?",
-         "Only Admin accounts have access to add, edit, or archive tools. "
-         "Staff accounts have view-only access. Contact your system administrator to update your role if needed."),
-        (False, "A tool shows 'Unassigned' in the Tag ID column. Can it still be borrowed?",
-         "Yes — untagged tools can still be borrowed if they have available stock. "
-         "However, assigning a Tag ID first through the Tagging module is recommended for accurate scanning and tracking."),
-        (False, "I forgot my password. How do I reset it?",
-         "On the login screen, click 'Forgot Password?' and enter your Employee ID and registered email address. "
-         "If they match, you will be prompted to set a new password. If you have no registered email, contact your Admin."),
-        (False, "Can I borrow multiple tools at once?",
-         "Yes. On the Borrowing & Return screen, scan your Employee ID first, then scan each tool's tag one by one. "
-         "Each scan adds it to the cart. Confirm the checkout when all tools are in the cart."),
-        (True, "What happens when I 'Archive' a tool?",
-         "Archiving removes the tool from the active inventory list but does not delete it or its transaction history. "
-         "Archived tools can be viewed and restored in Maintenance → Archived Tools."),
-        (False, "Can I return only some of the tools I borrowed?",
-         "Yes. On the Return panel, scan your Employee ID and the Tool Tag or TRN, then set the Qty field to the number "
-         "you want to return (up to the total amount you currently have checked out for that tool)."),
-        (False, "What is ABC Analysis in the Reports module?",
-         "ABC Analysis applies the Pareto (80/20) principle to tool borrowing data. Category A tools are the top 20% most "
-         "frequently borrowed and need the strictest monitoring. Category B is the middle tier, and Category C are the "
-         "least-used tools which typically need minimal reorder attention."),
-        (True, "How do I back up data, and where is the backup file saved?",
-         "Go to Maintenance → Backup Data, select the tables to include, click 'Select Backup Destination & Export', "
-         "and choose a folder on your computer. The file is saved as a timestamped .json file."),
+        (False, "How do I issue a tool to a worker?",
+         "Under the strict Requisition workflow, you can no longer 'just borrow' an item. The worker must be assigned to a Project, and that Project must be 'Approved' by an Admin. Only then can you go to Tool Issuance, scan the worker's ID, select the project, and scan the tools."),
+        (False, "What is the 'Worker' role?",
+         "Workers are field personnel. While they don't necessarily log into the desktop app, their Employee IDs are registered in the system so they can be tagged to Projects and held accountable for scanned tool deployments."),
+        (True, "Where do completed projects or broken tools go?",
+         "They are sent to the Centralized Archive within the Maintenance module. This keeps your active Inventory and Project boards clean while preserving historical records and audit trails."),
+        (False, "I scanned a QR code but it didn't read. What do I do?",
+         "Ensure the QR code is well-lit and aligned inside the green targeting box on the screen. If the physical label is damaged, you can manually type the Tag ID or Employee ID into the entry field and press Enter."),
+        (False, "Why can't I approve a Project Requisition?",
+         "Only Admin accounts have the authority to switch a Project from 'Pending' to 'Approved'. Staff accounts can draft plans, but require an Admin to greenlight the deployment."),
+        (False, "Can I return only a partial amount of consumables?",
+         "Yes. When retrieving consumables (like boxes of nails or wire spools), scan the item and manually adjust the Qty field to reflect exactly how much is being restocked (e.g., 0.5 for half a box)."),
+        (True, "How do I back up the system data?",
+         "Navigate to Maintenance -> Backup Data. Check the boxes for the tables you want to secure, click 'Select Backup Destination', and save the .json file to a secure drive."),
         (False, "Is my password stored securely?",
-         "Yes. All passwords are hashed using bcrypt before being stored in the database. "
-         "The original password is never saved — even administrators cannot view it. "
-         "This complies with the Philippines' Data Privacy Act of 2012 (RA 10173)."),
+         "Yes. All passwords are automatically encrypted using bcrypt hashing. Administrators cannot view your password, ensuring compliance with data privacy standards."),
     ]
 
     def __init__(self, parent, user_info=None):
@@ -157,9 +135,6 @@ class HelpView(ctk.CTkFrame):
         elif selected_tab == "System Requirements": self.render_sysreq_tab()
         elif selected_tab == "Support Tickets": self.render_tickets_tab()
 
-    # ==========================================
-    # Shared: keyword search bar builder
-    # ==========================================
     def _build_search_bar(self, parent, on_search, placeholder="Search keywords..."):
         bar = ctk.CTkFrame(parent, fg_color="transparent")
         bar.pack(fill="x", padx=20, pady=(12, 4))
@@ -174,12 +149,6 @@ class HelpView(ctk.CTkFrame):
                       command=lambda: [entry.delete(0, "end"), on_search("")]).pack(side="left")
         return entry
 
-    # ------------------------------------------
-    # Linear keyword search algorithm (O(n))
-    # Scans title + each bullet point for the keyword.
-    # Returns True if any text contains the keyword (case-insensitive).
-    # Consistent with the simple, practical algorithms described in Ch.3.
-    # ------------------------------------------
     @staticmethod
     def _section_matches(title, points, keyword):
         kw = keyword.lower()
@@ -200,7 +169,6 @@ class HelpView(ctk.CTkFrame):
         outer.grid_columnconfigure(0, weight=1)
         outer.grid_rowconfigure(1, weight=1)
 
-        # Header
         hdr = ctk.CTkFrame(outer, fg_color="transparent")
         hdr.pack(fill="x", padx=20, pady=(16, 0))
         ctk.CTkLabel(hdr, text="User Guide — Automated Management System",
@@ -210,7 +178,6 @@ class HelpView(ctk.CTkFrame):
             outer, self._filter_guide, "Search guide sections..."
         )
 
-        # Scrollable content
         self._guide_scroll = ctk.CTkScrollableFrame(
             outer, fg_color="transparent")
         self._guide_scroll.pack(
@@ -228,10 +195,8 @@ class HelpView(ctk.CTkFrame):
 
         found_any = False
         for admin_only, title, points in self.GUIDE_SECTIONS:
-            # Skip admin-only sections for staff
             if admin_only and not self.is_admin:
                 continue
-            # Keyword filter — linear scan
             if keyword and not self._section_matches(title, points, keyword):
                 continue
 
@@ -245,7 +210,6 @@ class HelpView(ctk.CTkFrame):
                 ctk.CTkLabel(card, text=f"  •  {point}",
                              font=("Inter", 11), text_color="#1A1A1A",
                              wraplength=780, justify="left").pack(anchor="w", padx=14, pady=1)
-            # compact bottom spacer
             ctk.CTkFrame(card, height=6, fg_color="transparent").pack()
 
         if not found_any:
@@ -320,14 +284,13 @@ class HelpView(ctk.CTkFrame):
             anchor="w", padx=20, pady=(16, 10))
 
         hardware_specs = [
-            ("Processor",        "Intel Core i7 or equivalent (64-bit)"),
+            ("Processor",        "Intel Core i3 or equivalent (64-bit)"),
             ("RAM",              "Minimum 8 GB"),
             ("Storage",          "At least 500 MB free disk space"),
             ("Operating System", "Windows 10 (64-bit) — recommended and tested"),
             ("Display",          "Minimum 1280×720 resolution (1920×1080 recommended)"),
             ("Webcam",           "HD Webcam 1080P — required for QR scanning features"),
-            ("Printer",
-             "Any standard printer — required for label and receipt printing"),
+            ("Printer",          "Any standard printer — required for label and receipt printing"),
             ("Network",          "LAN connection for database access (no internet required)"),
         ]
         software_specs = [
@@ -377,7 +340,6 @@ class HelpView(ctk.CTkFrame):
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
 
-        # Auto-create the table if it doesn't exist
         conn = get_connection()
         if conn:
             try:
@@ -396,7 +358,6 @@ class HelpView(ctk.CTkFrame):
             finally:
                 if conn.is_connected(): c.close(); conn.close()
 
-        # --- STAFF VIEW: Form to submit ---
         if not self.is_admin:
             form_bg = ctk.CTkFrame(frame, fg_color="#F9FAFB", corner_radius=10)
             form_bg.pack(fill="x", padx=20, pady=(20, 10))
@@ -427,7 +388,6 @@ class HelpView(ctk.CTkFrame):
 
             ctk.CTkButton(form_bg, text="Send to Admin", fg_color="#1E4528", hover_color="#14301C", command=submit_ticket).pack(anchor="e", padx=15, pady=(5, 15))
 
-        # --- LIST VIEW (Shared) ---
         ctk.CTkLabel(frame, text="Ticket Inbox" if self.is_admin else "My Previous Tickets", font=("Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(10, 5))
         
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
@@ -464,7 +424,6 @@ class HelpView(ctk.CTkFrame):
                         reply_box.pack(fill="x", padx=15, pady=(5, 10))
                         ctk.CTkLabel(reply_box, text=f"Admin Reply: {t['admin_reply']}", font=("Inter", 11, "bold"), text_color="#1E4528", justify="left", wraplength=650).pack(anchor="w", padx=10, pady=10)
                     elif self.is_admin and t['status'] == 'Open':
-                        # Admin Reply mechanism
                         reply_entry = ctk.CTkEntry(card, placeholder_text="Type reply here...")
                         reply_entry.pack(fill="x", padx=15, pady=5)
                         

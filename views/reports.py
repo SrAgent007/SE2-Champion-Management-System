@@ -413,6 +413,18 @@ class ReportsView(ctk.CTkFrame):
                 rows = data
 
             total_rows = len(rows)
+            criteria = (
+                "Current analytic dataset for active tools. Date range: None."
+                if report_type == "abc" else
+                "All available tool usage records. Date range: None."
+                if report_type == "usage" else
+                "Current employee activity history. Date range: None."
+            )
+            messagebox.showinfo(
+                "Export Criteria",
+                f"Report: {title}\nRows: {total_rows}\nCriteria: {criteria}",
+                parent=self.winfo_toplevel()
+            )
             canvas_height = 160 + (total_rows * line_h) + 80
 
             canvas = Image.new("RGB", (canvas_width, canvas_height), "white")

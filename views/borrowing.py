@@ -413,6 +413,9 @@ class BorrowingView(ctk.CTkFrame):
         ctk.CTkLabel(c_frame, text="3. Return Condition", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w")
         self.r_condition = ctk.CTkOptionMenu(c_frame, values=["Good", "Needs Repair", "Damaged", "Lost"], fg_color="#F9FAFB", text_color="black")
         self.r_condition.pack(fill="x", pady=(5, 0))
+        ctk.CTkLabel(c_frame, text="Condition Details", font=("Inter", 10), text_color="gray").pack(anchor="w", pady=(10, 0))
+        self.r_condition_desc = ctk.CTkTextbox(c_frame, height=80, fg_color="#F9FAFB", border_width=1, border_color="#E0E0E0")
+        self.r_condition_desc.pack(fill="x", pady=(5, 0))
 
         q_frame = ctk.CTkFrame(cond_qty_row, fg_color="transparent")
         q_frame.grid(row=0, column=1, sticky="ew", padx=(5, 0))
@@ -523,13 +526,14 @@ class BorrowingView(ctk.CTkFrame):
 
         modal = ctk.CTkToplevel(self)
         modal.title(f"Transaction Overview — {trn_label}")
-        modal.geometry("520x480")
+        modal.geometry("520x550")
+        modal.minsize(400, 450)
         modal.configure(fg_color="white")
         modal.attributes("-topmost", True)
         modal.grab_set()
         modal.update_idletasks()
         x = (modal.winfo_screenwidth() // 2) - 260
-        y = (modal.winfo_screenheight() // 2) - 240
+        y = (modal.winfo_screenheight() // 2) - 275
         modal.geometry(f"+{x}+{y}")
 
         # Header
@@ -559,18 +563,9 @@ class BorrowingView(ctk.CTkFrame):
         detail_row("Status:",     row['status'], val_color=status_color)
         ctk.CTkFrame(card, height=8, fg_color="transparent").pack()
 
-        # Items section
-        ctk.CTkLabel(modal, text="Items in this Transaction",
-                     font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=24, pady=(6, 2))
-        items_frame = ctk.CTkScrollableFrame(modal, fg_color="#F9FAFB", corner_radius=8, height=80)
-        items_frame.pack(fill="x", padx=24, pady=(0, 12))
-
-        # Query all tools in the same project+user batch
-        self._load_modal_items(items_frame, row)
-
-        # Buttons
+        # Buttons (Pack these FIRST at the bottom so they are anchored)
         btn_frame = ctk.CTkFrame(modal, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=24, pady=(0, 20))
+        btn_frame.pack(side="bottom", fill="x", padx=24, pady=(0, 20))
 
         ctk.CTkButton(btn_frame, text="🖨  Reprint Receipt", height=38,
                       fg_color="#1E4528", hover_color="#14301C",
@@ -581,6 +576,17 @@ class BorrowingView(ctk.CTkFrame):
                       fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
                       font=("Inter", 12, "bold"),
                       command=modal.destroy).pack(side="right")
+
+        # Items section
+        ctk.CTkLabel(modal, text="Items in this Transaction",
+                     font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=24, pady=(6, 2))
+        
+        # CTkScrollableFrame configured to expand and absorb overflow
+        items_frame = ctk.CTkScrollableFrame(modal, fg_color="#F9FAFB", corner_radius=8)
+        items_frame.pack(fill="both", expand=True, padx=24, pady=(0, 12))
+
+        # Query all tools in the same project+user batch
+        self._load_modal_items(items_frame, row)
 
     def _load_modal_items(self, frame, row):
         conn = get_connection()
@@ -1155,19 +1161,24 @@ class BorrowingView(ctk.CTkFrame):
             return messagebox.showerror("Error", f"Cannot retrieve {return_qty}. You only have {self.max_returnable} deployed.", parent=self.winfo_toplevel())
 
         new_cond = self.r_condition.get()
+        condition_notes = self.r_condition_desc.get("1.0", "end").strip()
         conn = get_connection()
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
+            cursor.execute("SHOW COLUMNS FROM transaction LIKE 'condition_return_notes'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE transaction ADD COLUMN condition_return_notes TEXT NULL")
+
             cursor.execute("SELECT transaction_id FROM transaction WHERE tool_id = %s AND status = 'Active' AND user_id = %s ORDER BY borrow_date ASC LIMIT %s", (self.active_return_tool_id, self.active_return_user_id, return_qty))
             transactions_to_close = cursor.fetchall()
             
             for trans in transactions_to_close:
                 cursor.execute("""
                     UPDATE transaction 
-                    SET status = 'Returned', return_date = NOW(), type = 'Retrieval', condition_at_return = %s 
+                    SET status = 'Returned', return_date = NOW(), type = 'Retrieval', condition_at_return = %s, condition_return_notes = %s 
                     WHERE transaction_id = %s
-                """, (new_cond, trans['transaction_id']))
+                """, (new_cond, condition_notes or None, trans['transaction_id']))
             
             cursor.execute("UPDATE inventory SET quantity_available = quantity_available + %s WHERE tool_id = %s", (return_qty, self.active_return_tool_id))
             cursor.execute("UPDATE tool SET `condition` = %s WHERE tool_id = %s", (new_cond, self.active_return_tool_id))
@@ -1178,6 +1189,7 @@ class BorrowingView(ctk.CTkFrame):
             self.r_user_name.configure(text="Name: Pending Scan...", text_color="gray")
             self.r_record_info.configure(text="Record: Pending Scan...", text_color="gray")
             self.r_condition.set("Good"); self.r_qty.delete(0, 'end'); self.r_qty.insert(0, "1")
+            self.r_condition_desc.delete("1.0", "end")
             self.active_return_tool_id = None; self.active_return_user_id = None; self.max_returnable = 0
             
             self.load_transaction_history()
