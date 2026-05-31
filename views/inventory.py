@@ -160,6 +160,31 @@ class InventoryView(ctk.CTkFrame):
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
+    def _get_column_min_sizes(self, weights, base_width=1100):
+        total = sum(weights) or 1
+        return [max(90, int((w / total) * base_width)) for w in weights]
+
+    def _make_table_header(self, parent, headers, weights, pad_left=20, pad_right=36):
+        header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
+        header_frame.pack(fill="x", padx=(pad_left, pad_right))
+        header_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (text, weight) in enumerate(zip(headers, weights)):
+            header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        return header_frame
+
+    def _make_table_row(self, parent, values, weights, bg):
+        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=40)
+        row_frame.pack(fill="x", pady=2)
+        row_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (value, weight) in enumerate(zip(values, weights)):
+            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+        return row_frame
+
     def build_right_table(self, parent):
         table_card = ctk.CTkFrame(parent, fg_color="white", corner_radius=10)
         table_card.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
@@ -180,16 +205,10 @@ class InventoryView(ctk.CTkFrame):
         self.reset_btn = ctk.CTkButton(search_frame, text="↻ Reset", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=self.reset_search)
         self.reset_btn.pack(side="left", padx=(0, 0))
 
-        header_frame = ctk.CTkFrame(table_card, fg_color="#1E4528", corner_radius=5, height=40)
-        header_frame.pack(fill="x", padx=(20, 36))
-        header_frame.pack_propagate(False)
-
         self.headers = ["PID", "Type", "Name", "Category", "Supplier", "Qty Avail.", "UoM", "Location", "Status"]
         self.weights = [1, 1, 2, 2, 2, 1, 1, 2, 1]
 
-        for col, (text, weight) in enumerate(zip(self.headers, self.weights)):
-            header_frame.grid_columnconfigure(col, weight=weight)
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        self._make_table_header(table_card, self.headers, self.weights, pad_left=20, pad_right=36)
 
         self.data_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
@@ -265,14 +284,10 @@ class InventoryView(ctk.CTkFrame):
                     display_loc, row['status']
                 ]
 
-                row_frame = ctk.CTkFrame(self.data_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=40)
-                row_frame.pack(fill="x", pady=2)
-                row_frame.pack_propagate(False)
+                row_frame = self._make_table_row(self.data_scroll, display_data, self.weights, "#F9FAFB" if i % 2 == 0 else "white")
                 row_frame.bind("<Button-1>", lambda e, lookup_id=pid: self.open_tool_modal(lookup_id))
 
                 for col, (text, weight) in enumerate(zip(display_data, self.weights)):
-                    row_frame.grid_columnconfigure(col, weight=weight)
-                    
                     if col == 7 and "Deployed:" in str(text):
                         txt_col = "#2980B9"
                     else:

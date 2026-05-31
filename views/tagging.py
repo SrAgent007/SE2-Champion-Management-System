@@ -51,12 +51,35 @@ class TaggingView(ctk.CTkFrame):
         self.headers = ["PID", "Name", "Category", "Supplier", "Qty", "Location", "Status", "Tag ID"]
         self.weights = [1, 2, 2, 2, 1, 2, 1, 2]
 
-        for col, (text, weight) in enumerate(zip(self.headers, self.weights)):
-            table_header.grid_columnconfigure(col, weight=weight)
-            ctk.CTkLabel(table_header, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        self._make_header(main_frame, self.headers, self.weights, pad_left=20, pad_right=36)
 
         self.data_scroll = ctk.CTkScrollableFrame(main_frame, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(10, 20))
+
+    def _get_column_min_sizes(self, weights, base_width=1100):
+        total = sum(weights) or 1
+        return [max(90, int((w / total) * base_width)) for w in weights]
+
+    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
+        header = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
+        header.pack(fill="x", padx=(pad_left, pad_right))
+        header.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (text, weight) in enumerate(zip(headers, weights)):
+            header.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+            ctk.CTkLabel(header, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        return header
+
+    def _make_row(self, parent, values, weights, bg):
+        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=40)
+        row_frame.pack(fill="x", pady=2)
+        row_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (value, weight) in enumerate(zip(values, weights)):
+            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+        return row_frame
 
     def load_tagging_data(self, query="", filter_type="All Tools"):
         for widget in self.data_scroll.winfo_children():
@@ -100,14 +123,10 @@ class TaggingView(ctk.CTkFrame):
                 tool_id, name, cat, sup, qty, loc, cond, tag, desc, price = row_data
                 full_data = [tool_id, name, desc, price, qty, loc, cond, tag, cat, sup]
                 
-                row_frame = ctk.CTkFrame(self.data_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=40)
-                row_frame.pack(fill="x", pady=2)
-                row_frame.pack_propagate(False)
+                row_frame = self._make_row(self.data_scroll, display_data, self.weights, "#F9FAFB" if i % 2 == 0 else "white")
                 row_frame.bind("<Button-1>", lambda e, data=full_data: self.open_tag_manager(data))
 
                 for col, (text, weight) in enumerate(zip(display_data, self.weights)):
-                    row_frame.grid_columnconfigure(col, weight=weight)
-                    
                     txt_color = "#D8000C" if col == 7 and text == "Unassigned" else "#1A1A1A"
                     font_weight = "bold" if col == 7 and text != "Unassigned" else "normal"
                     

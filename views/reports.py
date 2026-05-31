@@ -50,6 +50,33 @@ class ReportsView(ctk.CTkFrame):
 
         self.render_abc_tab()
 
+    def _get_column_min_sizes(self, weights, base_width=1100):
+        total = sum(weights) or 1
+        return [max(90, int((w / total) * base_width)) for w in weights]
+
+    def _make_header(self, parent, headers, weights, pad_left=30, pad_right=36):
+        hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
+                           corner_radius=5, height=40)
+        hdr.pack(fill="x", padx=(pad_left, pad_right))
+        hdr.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (h, w) in enumerate(zip(headers, weights)):
+            hdr.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
+            ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
+                         text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        return hdr
+
+    def _make_row(self, parent, vals, weights, bg):
+        rf = ctk.CTkFrame(parent, fg_color=bg, height=40)
+        rf.pack(fill="x", pady=2)
+        rf.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (val, w) in enumerate(zip(vals, weights)):
+            rf.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
+        return rf
+
     def switch_tab(self, key, tabs):
         for widget in self.tab_content.winfo_children():
             widget.destroy()
@@ -97,15 +124,7 @@ class ReportsView(ctk.CTkFrame):
                    "Times Borrowed", "Cumulative %", "ABC Category"]
         weights = [1, 1, 3, 2, 2, 2]
 
-        hdr = ctk.CTkFrame(frame, fg_color="#1E4528",
-                           corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=(30, 46))
-        hdr.pack_propagate(False)
-
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        self._make_header(frame, headers, weights, pad_left=30, pad_right=46)
 
         self._abc_scroll = ctk.CTkScrollableFrame(
             frame, fg_color="transparent")
@@ -165,14 +184,9 @@ class ReportsView(ctk.CTkFrame):
                 display_data = [f"#{i+1}", str(tool['tool_id']), tool['name'],
                                 str(tool['usage_count']), f"{cum_pct:.1f}%", category]
 
-                rf = ctk.CTkFrame(scroll,
-                                  fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=40)
-                rf.pack(fill="x", pady=2)
-                rf.pack_propagate(False)
+                rf = self._make_row(scroll, display_data, [1, 1, 3, 2, 2, 2], "#F9FAFB" if i % 2 == 0 else "white")
 
                 for col, (text, w) in enumerate(zip(display_data, [1, 1, 3, 2, 2, 2])):
-                    rf.grid_columnconfigure(col, weight=w)
                     txt_col = color if col == 5 else "black"
                     ctk.CTkLabel(rf, text=text,
                                  font=("Inter", 11, "bold" if col ==
@@ -216,15 +230,7 @@ class ReportsView(ctk.CTkFrame):
                    "Currently Out", "Qty Available", "Condition"]
         weights = [1, 2, 2, 2, 2, 2, 2]
 
-        hdr = ctk.CTkFrame(frame, fg_color="#1E4528",
-                           corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=30)
-        hdr.pack_propagate(False)
-
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        self._make_header(frame, headers, weights, pad_left=30, pad_right=36)
 
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=30, pady=(10, 30))
@@ -264,14 +270,9 @@ class ReportsView(ctk.CTkFrame):
                 ]
                 self._usage_data.append(vals)
 
-                rf = ctk.CTkFrame(scroll,
-                                  fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=40)
-                rf.pack(fill="x", pady=2)
-                rf.pack_propagate(False)
+                rf = self._make_row(scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
 
                 for col, (val, w) in enumerate(zip(vals, weights)):
-                    rf.grid_columnconfigure(col, weight=w)
                     color = "#1A1A1A"
                     if col == 6:
                         color = "#2ECC71" if val == "Good" else "#D8000C"
@@ -358,14 +359,9 @@ class ReportsView(ctk.CTkFrame):
                 ]
                 self._activity_data.append(vals)
 
-                rf = ctk.CTkFrame(scroll,
-                                  fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=40)
-                rf.pack(fill="x", pady=2)
-                rf.pack_propagate(False)
+                rf = self._make_row(scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
 
                 for col, (val, w) in enumerate(zip(vals, weights)):
-                    rf.grid_columnconfigure(col, weight=w)
                     color = "#1A1A1A"
                     if col == 4 and int(val) > 0:
                         color = "#D8000C"

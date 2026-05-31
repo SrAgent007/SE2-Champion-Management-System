@@ -6,6 +6,8 @@ import tempfile
 from PIL import Image, ImageDraw, ImageFont
 
 # Load the secret credentials from the .env file
+# DB_HOST can be a LAN MySQL host/IP, a remote server, or localhost.
+# Using a LAN host preserves the app logic and only changes which database server is targeted.
 load_dotenv()
 
 def get_connection():

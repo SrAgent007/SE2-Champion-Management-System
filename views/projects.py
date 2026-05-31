@@ -189,6 +189,31 @@ class ProjectsView(ctk.CTkFrame):
             self.workers_list.pop(idx)
             self._refresh_worker_tags()
 
+    def _get_column_min_sizes(self, weights, base_width=1100):
+        total = sum(weights) or 1
+        return [max(90, int((w / total) * base_width)) for w in weights]
+
+    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
+        hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
+        hdr.pack(fill="x", padx=(pad_left, pad_right))
+        hdr.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (text, weight) in enumerate(zip(headers, weights)):
+            hdr.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+            ctk.CTkLabel(hdr, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        return hdr
+
+    def _make_row(self, parent, values, weights, bg):
+        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=45)
+        row_frame.pack(fill="x", pady=2)
+        row_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (val, weight) in enumerate(zip(values, weights)):
+            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+        return row_frame
+
     def open_tool_picker(self):
         modal = ctk.CTkToplevel(self)
         modal.title("Inventory Requisition Catalog")
@@ -226,14 +251,9 @@ class ProjectsView(ctk.CTkFrame):
         
         search_name.focus_set()
 
-        hdr = ctk.CTkFrame(modal, fg_color="#1E4528", height=40, corner_radius=5)
-        hdr.pack(fill="x", padx=(20, 36))
-        hdr.pack_propagate(False)
-        weights = [1, 1, 2, 1, 1, 1, 1]
         cols = ["PID", "Type", "Item Name", "UoM", "Avail/Tot", "Req Qty", "Action"]
-        for col, (w, text) in enumerate(zip(weights, cols)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=5, pady=10, sticky="w")
+        weights = [1, 1, 2, 1, 1, 1, 1]
+        self._make_header(modal, cols, weights, pad_left=20, pad_right=36)
 
         list_scroll = ctk.CTkScrollableFrame(modal, fg_color="transparent")
         list_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 10))
@@ -269,7 +289,9 @@ class ProjectsView(ctk.CTkFrame):
                     rf = ctk.CTkFrame(list_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=40)
                     rf.pack(fill="x", pady=2)
                     rf.pack_propagate(False)
-                    for col, w in enumerate(weights): rf.grid_columnconfigure(col, weight=w)
+                    min_sizes = self._get_column_min_sizes(weights)
+                    for col, w in enumerate(weights):
+                        rf.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
 
                     ctk.CTkLabel(rf, text=str(row['tool_id']), font=("Inter", 10), text_color="gray").grid(row=0, column=0, padx=5, pady=8, sticky="w")
                     type_color = "#D35400" if row['type'] == "Consumable" else "#1A1A1A"
@@ -470,16 +492,10 @@ class ProjectsView(ctk.CTkFrame):
         ctk.CTkButton(top, text="Search", width=80, fg_color="#F1C40F", text_color="black", hover_color="#D4AC0D", font=("Inter", 11, "bold"), command=lambda: self.load_projects(self.proj_search.get().strip())).pack(side="right", padx=5)
         ctk.CTkButton(top, text="↻ Reset", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=lambda: [self.proj_search.delete(0, "end"), self.load_projects()]).pack(side="right")
 
-        hdr = ctk.CTkFrame(table_card, fg_color="#1E4528", corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=(20, 36))
-        hdr.pack_propagate(False)
-
         headers = ["ID", "Project Name", "Client", "Project Head", "Status", "Actions"]
         weights = [1, 3, 2, 2, 1, 1]
 
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+        self._make_header(table_card, headers, weights, pad_left=20, pad_right=36)
 
         self.project_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.project_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
@@ -512,19 +528,15 @@ class ProjectsView(ctk.CTkFrame):
             
             for i, row in enumerate(cursor.fetchall()):
                 row["status"] = row["display_status"]
-                rf = ctk.CTkFrame(self.project_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=45)
-                rf.pack(fill="x", pady=2)
-                rf.pack_propagate(False)
+                vals = [str(row["project_id"]), row["name"], row["client"], row.get("project_head") or "—", row["status"], ""]
+                weights = [1, 3, 2, 2, 1, 1]
 
-                vals = [str(row["project_id"]), row["name"], row["client"], row.get("project_head") or "—", row["status"]]
-                weights = [1, 3, 2, 2, 1]
+                rf = self._make_row(self.project_scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
 
                 for col, (val, w) in enumerate(zip(vals, weights)):
-                    rf.grid_columnconfigure(col, weight=w)
                     txt_color = "#D35400" if col == 4 and val == "Pending" else ("#2ECC71" if col == 4 and val == "Approved" else "#1A1A1A")
                     ctk.CTkLabel(rf, text=val, font=("Inter", 11, "bold" if col == 4 else "normal"), text_color=txt_color).grid(row=0, column=col, padx=10, pady=12, sticky="w")
 
-                rf.grid_columnconfigure(5, weight=1)
                 btn_color = "#3498DB" if row['status'] == 'Pending' else "#BDC3C7"
                 btn_text = "Review" if row['status'] == 'Pending' else "View"
                 ctk.CTkButton(rf, text=btn_text, width=65, height=28, fg_color=btn_color, hover_color="#2980B9", font=("Inter", 11, "bold"), command=lambda r=row: self.open_project_modal(r)).grid(row=0, column=5, padx=10, pady=10, sticky="w")

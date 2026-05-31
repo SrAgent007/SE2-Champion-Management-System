@@ -11,10 +11,9 @@ class TrackingView(ctk.CTkFrame):
         self.user_info = user_info or {}
         self.is_admin = self.user_info.get("role", "Staff") == "Admin"
 
-        # Global UI Fix: Static Wrapper Hierarchy
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0) # Top Bar
-        self.grid_rowconfigure(1, weight=1) # Content Area
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
 
         if self.is_admin:
             self.build_admin_view()
@@ -26,15 +25,16 @@ class TrackingView(ctk.CTkFrame):
             log_action(uid, "Viewed", "Tracking & Accountability", "Opened Tracking module")
 
     # ==========================================
-    # SHARED: uniform table builders
+    # GLOBAL TABLE FIX: GRID-LOCK ALGORITHM
     # ==========================================
     def _make_header(self, parent, headers, weights):
         hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=38)
-        hdr.pack(fill="x", padx=(20, 36))
+        hdr.pack(fill="x", padx=(20, 36)) # 36px right pad accounts for the scrollbar
         hdr.pack_propagate(False)
         total = sum(weights)
         for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
+            min_w = int((w / total) * 1100) # Strict minsize anchoring
+            hdr.grid_columnconfigure(col, weight=w, minsize=min_w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
                          text_color="white").grid(row=0, column=col, padx=8, pady=8, sticky="w")
         return hdr
@@ -45,7 +45,8 @@ class TrackingView(ctk.CTkFrame):
         rf.pack_propagate(False)
         total = sum(weights)
         for col, (val, w) in enumerate(zip(vals, weights)):
-            rf.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
+            min_w = int((w / total) * 1100) # Identical minsize anchoring
+            rf.grid_columnconfigure(col, weight=w, minsize=min_w)
         return rf
 
     # ==========================================
@@ -97,11 +98,7 @@ class TrackingView(ctk.CTkFrame):
         status = row.get("status", "N/A")
         ctk.CTkLabel(scroll_container, text=f"• {tool_name} (Tag: {tag_id}) - {status}", font=("Inter", 12)).pack(anchor="w", padx=10, pady=2)
 
-    # ==========================================
-    # ADMIN VIEW
-    # ==========================================
     def build_admin_view(self):
-        # Global UI Fix: Top Segmented Tabs
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
 
@@ -162,12 +159,11 @@ class TrackingView(ctk.CTkFrame):
                       text_color="black", hover_color="#CCCCCC",
                       command=lambda: [self.log_search.delete(0, "end"), self.load_logs()]).pack(side="right")
 
-        # --- Added specific UX Helper Sub-Header here ---
-        ctk.CTkLabel(frame, text="An endless, chronological history book. Records exactly what happened.",
+        ctk.CTkLabel(frame, text="An endless, chronological history book. Records exactly what happened and when (e.g., 'John took a hammer on Tuesday').",
                      font=("Inter", 11, "italic"), text_color="gray").pack(anchor="w", padx=20, pady=(0, 8))
 
         headers = ["TRN", "Type", "Tool Name", "Tag ID", "Borrower", "Borrow Date", "Return Date", "Status"]
-        weights = [1,     1,      3,            2,       2,           2,             2,             1]
+        weights = [1,     1,      3,            2,       2,           3,             3,             1]
         self._log_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -257,8 +253,7 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Audit Trail — Borrow & Return Records",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        # --- Added specific UX Helper Sub-Header here ---
-        ctk.CTkLabel(frame, text="Investigating Missing Items.",
+        ctk.CTkLabel(frame, text="Investigating Missing Items: An active math equation. Cross-references Total Inventory vs. Available Stock vs. Active Transactions to flag discrepancies.",
                      font=("Inter", 11, "italic"), text_color="gray").pack(anchor="w", padx=20, pady=(0, 8))
 
         filter_row = ctk.CTkFrame(frame, fg_color="transparent")
@@ -292,8 +287,8 @@ class TrackingView(ctk.CTkFrame):
 
         headers = ["TRN", "Borrower", "Tool", "Tag ID", "Borrowed On",
                    "Return Date", "Cond@Borrow", "Cond@Return", "Status"]
-        weights = [1,     2,          2,      2,       2,
-                   2,           2,            2,           1]
+        weights = [1,     2,          3,      2,       3,
+                   3,           2,            2,           1]
         self._audit_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -389,8 +384,8 @@ class TrackingView(ctk.CTkFrame):
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
         ctk.CTkLabel(frame,
-                     text="Records every login, logout, module visit, edit, search, and transaction. ",
-                         
+                     text="Records every login, logout, module visit, edit, search, and transaction. "
+                          "Auto-pruned to the latest 10,000 entries to protect the database.",
                      font=("Inter", 11), text_color="gray",
                      wraplength=900, justify="left").pack(anchor="w", padx=20, pady=(0, 8))
 
@@ -428,7 +423,7 @@ class TrackingView(ctk.CTkFrame):
         self.act_summary.pack(anchor="w", padx=20, pady=(0, 5))
 
         headers = ["Log ID", "Timestamp", "Employee", "Action Type", "Module", "Details"]
-        weights = [1,        2,           2,          2,             2,        4]
+        weights = [1,        3,           3,          2,             2,        4]
         self._act_weights = weights
         self._make_header(frame, headers, weights)
 
@@ -505,11 +500,7 @@ class TrackingView(ctk.CTkFrame):
                 cursor.close()
                 conn.close()
 
-    # ==========================================
-    # STAFF VIEW: Personal history only
-    # ==========================================
     def build_staff_view(self):
-        # Global UI Fix: Top Segmented Tabs for Staff consistency
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
 
@@ -540,7 +531,7 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="Click on any transaction record below to view its Deployment Receipt.", font=("Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
 
         headers = ["TRN", "Tool Name", "Tag ID", "Borrow Date", "Return Date", "Cond@Return", "Status"]
-        weights = [1,     2,           2,        2,             2,             2,             1]
+        weights = [1,     3,           2,        3,             3,             2,             1]
         self._make_header(frame, headers, weights)
 
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")

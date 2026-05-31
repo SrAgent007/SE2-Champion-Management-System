@@ -182,6 +182,32 @@ class DashboardApp(ctk.CTkToplevel):
         except Exception:
             self.profile_pic_label.configure(text="👤")
 
+    def _get_column_min_sizes(self, weights, base_width=1100):
+        total = sum(weights) or 1
+        return [max(90, int((w / total) * base_width)) for w in weights]
+
+    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
+        header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=35)
+        header_frame.pack(fill="x", padx=(pad_left, pad_right))
+        header_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (text, weight) in enumerate(zip(headers, weights)):
+            header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"),
+                         text_color="white").grid(row=0, column=col, padx=10, pady=5, sticky="w")
+        return header_frame
+
+    def _make_row(self, parent, values, weights, bg):
+        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=35)
+        row_frame.pack(fill="x", padx=20, pady=0)
+        row_frame.pack_propagate(False)
+
+        min_sizes = self._get_column_min_sizes(weights)
+        for col, (value, weight) in enumerate(zip(values, weights)):
+            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
+        return row_frame
+
     def confirm_logout(self):
         if hasattr(self, "_clock_job"):
             self.after_cancel(self._clock_job)
@@ -378,17 +404,17 @@ class DashboardApp(ctk.CTkToplevel):
         # 3. Action Items Card
         c3_bg = "#FFF5F5" if metrics["action_items"] > 0 else "#F9FAFB"
         c3_border = "#D8000C" if metrics["action_items"] > 0 else "#E0E0E0"
-        self.dash_action_card = ctk.CTkFrame(cards_frame, fg_color=c3_bg, corner_radius=10, height=100, border_width=1, border_color=c3_border)
+        self.dash_action_card = ctk.CTkFrame(cards_frame, fg_color=c3_bg, corner_radius=10, height=130, border_width=1, border_color=c3_border)
         self.dash_action_card.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
         self.dash_action_card.pack_propagate(False)
-
+        
         self.dash_action_top = ctk.CTkFrame(self.dash_action_card, fg_color="transparent")
         self.dash_action_top.pack(fill="x", padx=20, pady=(15, 0))
         
         self._render_action_badges(metrics)
 
-        ctk.CTkLabel(self.dash_action_card, text="Action Items", font=("Inter", 13, "bold"), text_color="black").pack(anchor="w", padx=20, pady=(0,0))
-        ctk.CTkLabel(self.dash_action_card, text="Requires immediate attention", font=("Inter", 11), text_color="gray").pack(anchor="w", padx=20)
+        ctk.CTkLabel(self.dash_action_card, text="Action Items", font=("Inter", 13, "bold"), text_color="black").pack(anchor="w", padx=20, pady=(10, 0))
+        ctk.CTkLabel(self.dash_action_card, text="Requires immediate attention", font=("Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(2, 12))
 
         # 4. Total Inventory Card
         c4 = ctk.CTkFrame(cards_frame, fg_color="#F1C40F", corner_radius=10, height=100)
@@ -412,13 +438,10 @@ class DashboardApp(ctk.CTkToplevel):
         ctk.CTkLabel(activity_card, text="Recent Activity Feed",
                      font=("Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=20)
 
-        header_frame = ctk.CTkFrame(activity_card, fg_color="#1E4528", corner_radius=5, height=35)
-        header_frame.pack(fill="x", padx=(20, 36))
-        header_frame.pack_propagate(False)
-        for col, text in enumerate(["Date & Time", "Action Type", "Module / Item", "User"]):
-            header_frame.grid_columnconfigure(col, weight=1)
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=5, sticky="w")
+        self._make_header(activity_card,
+                          ["Date & Time", "Action Type", "Module / Item", "User"],
+                          [2, 1, 2, 1],
+                          pad_left=20, pad_right=36)
 
         self.dash_activity_frame = ctk.CTkFrame(activity_card, fg_color="transparent")
         self.dash_activity_frame.pack(fill="both", expand=True)
@@ -461,14 +484,11 @@ class DashboardApp(ctk.CTkToplevel):
             activities = [("-", "No recent activity recorded.", "-", "-")]
 
         for i, row_data in enumerate(activities):
-            row_frame = ctk.CTkFrame(self.dash_activity_frame,
-                                     fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                     height=35)
-            row_frame.pack(fill="x", padx=20)
-            row_frame.pack_propagate(False)
+            row_frame = self._make_row(self.dash_activity_frame,
+                                      row_data,
+                                      [2, 1, 2, 1],
+                                      "#F9FAFB" if i % 2 == 0 else "white")
             for col, text in enumerate(row_data):
-                row_frame.grid_columnconfigure(col, weight=1)
-                
                 font_weight = "normal"
                 color = "#1A1A1A"
                 if col == 1:
@@ -481,7 +501,7 @@ class DashboardApp(ctk.CTkToplevel):
                     elif text == "Retrieved":
                         color = "#2ECC71"
                         font_weight = "bold"
-                
+
                 ctk.CTkLabel(row_frame, text=text, font=("Inter", 11, font_weight),
                              text_color=color).grid(row=0, column=col, padx=10, pady=5, sticky="w")
 
