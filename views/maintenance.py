@@ -24,7 +24,7 @@ class MaintenanceView(ctk.CTkFrame):
         for col, (h, w) in enumerate(zip(headers, weights)):
             hdr.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=8, pady=8, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=8, sticky="ew")
         return hdr
 
     def _make_row(self, parent, vals, weights, bg):
@@ -36,69 +36,84 @@ class MaintenanceView(ctk.CTkFrame):
             rf.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
         return rf
 
-    def _ensure_user_archive_columns(self, cursor):
-        cursor.execute("SHOW COLUMNS FROM `user` LIKE 'status'")
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE `user` ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'Active'")
+    def _ensure_user_archive_columns(self):
+        """Run schema migration in its own connection to avoid cursor state conflicts."""
+        conn = get_connection()
+        if not conn:
+            return
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SHOW COLUMNS FROM `user` LIKE 'status'")
+            has_status = cursor.fetchone() is not None
+            cursor.fetchall()  # drain any remaining rows
+            if not has_status:
+                cursor.execute(
+                    "ALTER TABLE `user` ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'Active'"
+                )
 
-        cursor.execute("SHOW COLUMNS FROM `user` LIKE 'archived_at'")
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE `user` ADD COLUMN archived_at DATETIME NULL")
+            cursor.execute("SHOW COLUMNS FROM `user` LIKE 'archived_at'")
+            has_archived = cursor.fetchone() is not None
+            cursor.fetchall()  # drain
+            if not has_archived:
+                cursor.execute(
+                    "ALTER TABLE `user` ADD COLUMN archived_at DATETIME NULL"
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"[Maintenance] Schema migration warning: {e}")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
 
     def build_view(self):
-        notebook_frame = ctk.CTkFrame(self, fg_color="transparent")
-        notebook_frame.grid(row=0, column=0, sticky="nsew")
-        notebook_frame.grid_columnconfigure(0, weight=1)
-        notebook_frame.grid_rowconfigure(1, weight=1)
+        # Run schema migration once before any tab tries to query user columns
+        self._ensure_user_archive_columns()
 
-        tab_bar = ctk.CTkFrame(notebook_frame, fg_color="white", corner_radius=10, height=50)
-        tab_bar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        tab_bar.pack_propagate(False)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
 
-        self.tab_content = ctk.CTkFrame(notebook_frame, fg_color="transparent")
-        self.tab_content.grid(row=1, column=0, sticky="nsew")
+        top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
+
+        ctk.CTkLabel(
+            top_bar, text="Maintenance & Archive",
+            font=("Inter", 16, "bold"), text_color="#1E4528"
+        ).pack(side="left")
+
+        tab_labels = [
+            "🔧 Issues & Repairs",
+            "📦 Archived Tools",
+            "👥 Archived Employees",
+            "📋 Archived Projects",
+        ]
+        self.tab_var = ctk.StringVar(value=tab_labels[0])
+        self.seg_btn = ctk.CTkSegmentedButton(
+            top_bar, values=tab_labels, variable=self.tab_var,
+            command=self.switch_tab,
+            fg_color="#F0F0F0", selected_color="#1E4528",
+            selected_hover_color="#14301C"
+        )
+        self.seg_btn.pack(side="right")
+
+        self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
+        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
 
-        tabs = [
-            ("Active Issues & Repairs", "issues"),
-            ("Archived Tools",          "tools"),
-            ("Archived Employees",      "employees"),
-            ("Archived Projects",       "projects"),
-        ]
+        self.switch_tab(tab_labels[0])
 
-        self.tab_buttons = {}
-        for text, key in tabs:
-            btn = ctk.CTkButton(
-                tab_bar, text=text,
-                fg_color="#1E4528" if key == "issues" else "transparent",
-                text_color="white" if key == "issues" else "#1A1A1A",
-                hover_color="#2A6038",
-                font=("Inter", 12, "bold"),
-                command=lambda k=key: self.switch_tab(k, tabs)
-            )
-            btn.pack(side="left", padx=10, pady=8)
-            self.tab_buttons[key] = btn
-
-        self.render_issues_tab()
-
-    def switch_tab(self, key, tabs):
+    def switch_tab(self, selected_tab):
         for widget in self.tab_content.winfo_children():
             widget.destroy()
-        for text, k in tabs:
-            btn = self.tab_buttons.get(k)
-            if btn:
-                btn.configure(
-                    fg_color="#1E4528" if k == key else "transparent",
-                    text_color="white" if k == key else "#1A1A1A"
-                )
-        if key == "issues":
+        if "Issues" in selected_tab:
             self.render_issues_tab()
-        elif key == "tools":
+        elif "Tools" in selected_tab:
             self.render_tools_tab()
-        elif key == "employees":
+        elif "Employees" in selected_tab:
             self.render_employees_tab()
-        elif key == "projects":
+        elif "Projects" in selected_tab:
             self.render_projects_tab()
 
     # ------------------------------------------
@@ -590,14 +605,11 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            self._ensure_user_archive_columns(cursor)
-            conn.commit()
-
             cursor.execute("""
                 SELECT user_id, employee_id, full_name, role, status, archived_at
                 FROM `user`
                 WHERE IFNULL(status, 'Inactive') != 'Active'
-                ORDER BY IFNULL(archived_at, user_id) DESC
+                ORDER BY archived_at DESC, user_id DESC
             """)
             rows = cursor.fetchall()
             
@@ -633,12 +645,10 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor()
-            cursor.execute("SHOW COLUMNS FROM `user` LIKE 'archived_at'")
-            archived_col = cursor.fetchone() is not None
-            if archived_col:
-                cursor.execute("UPDATE `user` SET status = 'Active', archived_at = NULL WHERE user_id = %s", (user_id,))
-            else:
-                cursor.execute("UPDATE `user` SET status = 'Active' WHERE user_id = %s", (user_id,))
+            cursor.execute(
+                "UPDATE `user` SET status = 'Active', archived_at = NULL WHERE user_id = %s",
+                (user_id,)
+            )
             conn.commit()
             
             uid = self.user_info.get("user_id")
@@ -682,18 +692,18 @@ class MaintenanceView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fetch completed, cancelled, and archived projects
+            # Only show projects that have been explicitly archived (archived_at IS NOT NULL)
             cursor.execute("""
                 SELECT project_id, name, client, status, end_date, archived_at
-                FROM projects 
-                WHERE status IN ('Completed', 'Cancelled') OR archived_at IS NOT NULL
-                ORDER BY IFNULL(archived_at, end_date) DESC
+                FROM projects
+                WHERE archived_at IS NOT NULL
+                ORDER BY archived_at DESC
             """)
                     
             rows = cursor.fetchall()
             
             if not rows:
-                ctk.CTkLabel(self._proj_scroll, text="No completed or archived projects found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(self._proj_scroll, text="No archived projects found. Archive a Completed or Cancelled project from Project Management.", text_color="gray", wraplength=600, justify="center").pack(pady=30)
                 return
 
             for i, row in enumerate(rows):

@@ -33,10 +33,10 @@ class TrackingView(ctk.CTkFrame):
         hdr.pack_propagate(False)
         total = sum(weights)
         for col, (h, w) in enumerate(zip(headers, weights)):
-            min_w = int((w / total) * 1100) # Strict minsize anchoring
+            min_w = int((w / total) * 900) # Strict minsize anchoring
             hdr.grid_columnconfigure(col, weight=w, minsize=min_w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=8, pady=8, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=8, sticky="ew")
         return hdr
 
     def _make_row(self, parent, vals, weights, bg):
@@ -45,7 +45,7 @@ class TrackingView(ctk.CTkFrame):
         rf.pack_propagate(False)
         total = sum(weights)
         for col, (val, w) in enumerate(zip(vals, weights)):
-            min_w = int((w / total) * 1100) # Identical minsize anchoring
+            min_w = int((w / total) * 900) # Identical minsize anchoring
             rf.grid_columnconfigure(col, weight=w, minsize=min_w)
         return rf
 
@@ -64,14 +64,6 @@ class TrackingView(ctk.CTkFrame):
 
         bottom_frame = ctk.CTkFrame(modal, fg_color="transparent")
         bottom_frame.pack(fill="x", side="bottom", padx=20, pady=20)
-        ctk.CTkButton(
-            bottom_frame, 
-            text="🖨️ Reprint Receipt", 
-            command=lambda: messagebox.showinfo("Print", "Receipt sent to printer.", parent=modal),
-            fg_color="#1E4528", 
-            hover_color="#14301C",
-            height=40
-        ).pack(fill="x")
 
         scroll_container = ctk.CTkScrollableFrame(modal, fg_color="transparent")
         scroll_container.pack(fill="both", expand=True, padx=20, pady=(20, 0))

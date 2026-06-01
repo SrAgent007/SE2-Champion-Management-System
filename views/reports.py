@@ -12,47 +12,41 @@ class ReportsView(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
 
         self.build_ui()
 
     def build_ui(self):
-        # Tab bar (matches existing system style)
-        tab_bar = ctk.CTkFrame(self, fg_color="white",
-                               corner_radius=10, height=50)
-        tab_bar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        tab_bar.grid_propagate(False)
+        top_bar = ctk.CTkFrame(self, fg_color="transparent")
+        top_bar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(top_bar, text="Reports", font=("Inter", 16, "bold"),
+                     text_color="#1E4528").pack(side="left")
+
+        self.tab_var = ctk.StringVar(value="Inventory ABC Analysis")
+        self.seg_btn = ctk.CTkSegmentedButton(
+            top_bar,
+            values=["Inventory ABC Analysis", "Tool Usage Report", "Employee Activity"],
+            variable=self.tab_var,
+            fg_color="#F0F0F0",
+            selected_color="#1E4528",
+            selected_hover_color="#14301C",
+            font=("Inter", 12, "bold"),
+            command=self.switch_tab
+        )
+        self.seg_btn.pack(side="right")
 
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
         self.tab_content.grid(row=1, column=0, sticky="nsew")
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-
-        tabs = [
-            ("Inventory ABC Analysis", "abc"),
-            ("Tool Usage Report", "usage"),
-            ("Employee Activity", "activity"),
-        ]
-
-        self.tab_buttons = {}
-        for text, key in tabs:
-            btn = ctk.CTkButton(
-                tab_bar, text=text,
-                fg_color="#1E4528" if key == "abc" else "transparent",
-                text_color="white" if key == "abc" else "#1A1A1A",
-                hover_color="#2A6038",
-                font=("Inter", 12, "bold"),
-                command=lambda k=key: self.switch_tab(k, tabs)
-            )
-            btn.pack(side="left", padx=10, pady=8)
-            self.tab_buttons[key] = btn
 
         self.render_abc_tab()
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=900):
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(80, int((w / total) * base_width)) for w in weights]
 
     def _make_header(self, parent, headers, weights, pad_left=30, pad_right=36):
         hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
@@ -64,7 +58,7 @@ class ReportsView(ctk.CTkFrame):
         for col, (h, w) in enumerate(zip(headers, weights)):
             hdr.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
             ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
         return hdr
 
     def _make_row(self, parent, vals, weights, bg):
@@ -77,23 +71,15 @@ class ReportsView(ctk.CTkFrame):
             rf.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
         return rf
 
-    def switch_tab(self, key, tabs):
+    def switch_tab(self, selected):
         for widget in self.tab_content.winfo_children():
             widget.destroy()
 
-        for _, k in tabs:
-            btn = self.tab_buttons.get(k)
-            if btn:
-                if k == key:
-                    btn.configure(fg_color="#1E4528", text_color="white")
-                else:
-                    btn.configure(fg_color="transparent", text_color="#1A1A1A")
-
-        if key == "abc":
+        if selected == "Inventory ABC Analysis":
             self.render_abc_tab()
-        elif key == "usage":
+        elif selected == "Tool Usage Report":
             self.render_usage_tab()
-        elif key == "activity":
+        elif selected == "Employee Activity":
             self.render_activity_tab()
 
     # ==========================================
@@ -114,7 +100,7 @@ class ReportsView(ctk.CTkFrame):
         ctk.CTkButton(top, text="⎙ Export PDF", width=110,
                       fg_color="#1E4528", hover_color="#14301C",
                       font=("Inter", 11, "bold"),
-                      command=lambda: self.export_pdf("abc")).pack(side="right")
+                      command=lambda: self.open_export_dialog("abc")).pack(side="right")
 
         ctk.CTkLabel(frame,
                      text="Algorithm dynamically categorizes tools based on the Pareto Principle (80/20 usage).",
@@ -220,7 +206,7 @@ class ReportsView(ctk.CTkFrame):
         ctk.CTkButton(top, text="⎙ Export PDF", width=110,
                       fg_color="#1E4528", hover_color="#14301C",
                       font=("Inter", 11, "bold"),
-                      command=lambda: self.export_pdf("usage")).pack(side="right")
+                      command=lambda: self.open_export_dialog("usage")).pack(side="right")
 
         ctk.CTkLabel(frame,
                      text="Summary of all tool transactions, availability, and condition status.",
@@ -306,7 +292,7 @@ class ReportsView(ctk.CTkFrame):
         ctk.CTkButton(top, text="⎙ Export PDF", width=110,
                       fg_color="#1E4528", hover_color="#14301C",
                       font=("Inter", 11, "bold"),
-                      command=lambda: self.export_pdf("activity")).pack(side="right")
+                      command=lambda: self.open_export_dialog("activity")).pack(side="right")
 
         ctk.CTkLabel(frame,
                      text="Aggregated borrowing activity per employee for accountability monitoring.",
@@ -324,7 +310,7 @@ class ReportsView(ctk.CTkFrame):
         for col, (h, w) in enumerate(zip(headers, weights)):
             hdr.grid_columnconfigure(col, weight=w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
 
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=30, pady=(10, 30))
@@ -378,50 +364,247 @@ class ReportsView(ctk.CTkFrame):
                 conn.close()
 
     # ==========================================
+    # PDF Export Dialog (date range popup)
+    # ==========================================
+    def open_export_dialog(self, report_type):
+        report_titles = {
+            "abc": "Inventory ABC Analysis Report",
+            "usage": "Tool Usage Report",
+            "activity": "Employee Activity Report",
+        }
+        title = report_titles.get(report_type, "Report")
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Export: {title}")
+        dialog.geometry("460x420")
+        dialog.configure(fg_color="#F4F6F8")
+        dialog.attributes("-topmost", True)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        dialog.update_idletasks()
+        sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
+        dialog.geometry(f"460x420+{(sw-460)//2}+{(sh-420)//2}")
+
+        card = ctk.CTkFrame(dialog, fg_color="white", corner_radius=10,
+                            border_width=1, border_color="#E0E0E0")
+        card.pack(padx=20, pady=20, fill="both", expand=True)
+
+        ctk.CTkLabel(card, text="Export Report",
+                     font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(18, 2))
+        ctk.CTkLabel(card, text=title,
+                     font=("Inter", 12), text_color="#1E4528").pack(anchor="w", padx=20, pady=(0, 12))
+
+        ctk.CTkFrame(card, height=1, fg_color="#E0E0E0").pack(fill="x", padx=20, pady=(0, 12))
+
+        ctk.CTkLabel(card, text="Date Range  (optional — leave blank for all records)",
+                     font=("Inter", 11, "bold"), text_color="#555555").pack(anchor="w", padx=20, pady=(0, 6))
+
+        dates_row = ctk.CTkFrame(card, fg_color="transparent")
+        dates_row.pack(fill="x", padx=20, pady=(0, 10))
+        dates_row.grid_columnconfigure(0, weight=1)
+        dates_row.grid_columnconfigure(1, weight=1)
+
+        start_f = ctk.CTkFrame(dates_row, fg_color="transparent")
+        start_f.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ctk.CTkLabel(start_f, text="From Date", font=("Inter", 11), text_color="gray").pack(anchor="w")
+        start_entry = ctk.CTkEntry(start_f, placeholder_text="YYYY-MM-DD")
+        start_entry.pack(fill="x", pady=(4, 0))
+
+        end_f = ctk.CTkFrame(dates_row, fg_color="transparent")
+        end_f.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        ctk.CTkLabel(end_f, text="To Date", font=("Inter", 11), text_color="gray").pack(anchor="w")
+        end_entry = ctk.CTkEntry(end_f, placeholder_text="YYYY-MM-DD")
+        end_entry.pack(fill="x", pady=(4, 0))
+
+        ctk.CTkLabel(card, text="Additional Criteria / Notes  (optional)",
+                     font=("Inter", 11, "bold"), text_color="#555555").pack(anchor="w", padx=20, pady=(4, 4))
+        notes_entry = ctk.CTkEntry(card, placeholder_text="e.g., Site A only, Q1 review...")
+        notes_entry.pack(fill="x", padx=20, pady=(0, 16))
+
+        def _validate_date(val, label):
+            if not val:
+                return True
+            try:
+                datetime.strptime(val, "%Y-%m-%d")
+                return True
+            except ValueError:
+                messagebox.showerror("Invalid Date",
+                                     f"{label} must be in YYYY-MM-DD format.", parent=dialog)
+                return False
+
+        def do_export():
+            sd = start_entry.get().strip()
+            ed = end_entry.get().strip()
+            note = notes_entry.get().strip()
+            if not _validate_date(sd, "From Date"):
+                return
+            if not _validate_date(ed, "To Date"):
+                return
+            dialog.destroy()
+            self.export_pdf(report_type,
+                            start_date=sd or None,
+                            end_date=ed or None,
+                            criteria_note=note or None)
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=(0, 16))
+        ctk.CTkButton(btn_row, text="⎙ Export Now", fg_color="#1E4528", hover_color="#14301C",
+                      font=("Inter", 12, "bold"), command=do_export).pack(side="left", expand=True, fill="x", padx=(0, 8))
+        ctk.CTkButton(btn_row, text="Cancel", width=90, fg_color="#E0E0E0",
+                      text_color="black", hover_color="#CCCCCC",
+                      command=dialog.destroy).pack(side="right")
+
+        start_entry.focus_set()
+        start_entry.bind("<Return>", lambda e: end_entry.focus_set())
+        end_entry.bind("<Return>", lambda e: notes_entry.focus_set())
+        notes_entry.bind("<Return>", lambda e: do_export())
+
+    # ==========================================
     # PDF Export (shared across all tabs)
     # ==========================================
-    def export_pdf(self, report_type):
+    def export_pdf(self, report_type, start_date=None, end_date=None, criteria_note=None):
         try:
             canvas_width = 900
             line_h = 28
             timestamp = datetime.now().strftime("%B %d, %Y %I:%M %p")
 
+            # Build date range label for PDF
+            if start_date and end_date:
+                date_range_label = f"{start_date}  to  {end_date}"
+            elif start_date:
+                date_range_label = f"From {start_date}"
+            elif end_date:
+                date_range_label = f"Up to {end_date}"
+            else:
+                date_range_label = "All records (no date filter)"
+
+            # Re-query with date filter if dates provided
+            conn = get_connection() if (start_date or end_date) else None
+
             if report_type == "abc":
-                data = getattr(self, "_abc_data", [])
                 title = "Inventory ABC Analysis Report"
                 col_labels = ["Rank", "Tool ID", "Tool Name",
                               "Times Borrowed", "Cumulative%", "Category"]
-                rows = [[d["rank"], d["tool_id"], d["name"], d["usage"], d["cum_pct"], d["category"]]
-                        for d in data]
+                if conn:
+                    try:
+                        cursor = conn.cursor(dictionary=True)
+                        params = []
+                        date_filter = ""
+                        if start_date:
+                            date_filter += " AND tr.borrow_date >= %s"
+                            params.append(start_date)
+                        if end_date:
+                            date_filter += " AND tr.borrow_date <= %s"
+                            params.append(end_date + " 23:59:59")
+                        cursor.execute(f"""
+                            SELECT t.tool_id, t.name, COUNT(tr.transaction_id) as usage_count
+                            FROM tool t
+                            LEFT JOIN transaction tr ON t.tool_id = tr.tool_id AND tr.type = 'Borrow' {date_filter}
+                            WHERE t.is_archived = 0
+                            GROUP BY t.tool_id, t.name
+                            ORDER BY usage_count DESC
+                        """, params)
+                        tools = cursor.fetchall()
+                        total_usage = sum(t['usage_count'] for t in tools) or 1
+                        cumulative = 0
+                        filtered_data = []
+                        for i, tool in enumerate(tools):
+                            cumulative += tool['usage_count']
+                            cum_pct = (cumulative / total_usage) * 100
+                            cat = "A (High)" if cum_pct <= 70 else ("B (Medium)" if cum_pct <= 90 else "C (Low)")
+                            filtered_data.append({
+                                "rank": f"#{i+1}", "tool_id": str(tool['tool_id']),
+                                "name": tool['name'], "usage": str(tool['usage_count']),
+                                "cum_pct": f"{cum_pct:.1f}%", "category": cat
+                            })
+                        rows = [[d["rank"], d["tool_id"], d["name"], d["usage"], d["cum_pct"], d["category"]]
+                                for d in filtered_data]
+                    finally:
+                        if conn.is_connected(): cursor.close(); conn.close()
+                else:
+                    data = getattr(self, "_abc_data", [])
+                    rows = [[d["rank"], d["tool_id"], d["name"], d["usage"], d["cum_pct"], d["category"]]
+                            for d in data]
 
             elif report_type == "usage":
-                data = getattr(self, "_usage_data", [])
                 title = "Tool Usage Report"
                 col_labels = ["Tool ID", "Name", "Tag ID", "Total Borrowed",
                               "Currently Out", "Qty Avail", "Condition"]
-                rows = data
+                if conn:
+                    try:
+                        cursor = conn.cursor(dictionary=True)
+                        params = []
+                        date_filter = ""
+                        if start_date:
+                            date_filter += " AND tr.borrow_date >= %s"
+                            params.append(start_date)
+                        if end_date:
+                            date_filter += " AND tr.borrow_date <= %s"
+                            params.append(end_date + " 23:59:59")
+                        cursor.execute(f"""
+                            SELECT t.tool_id, t.name, IFNULL(t.tag_id,'—') as tag_id,
+                                   COUNT(tr.transaction_id) as total_borrowed,
+                                   SUM(IF(tr.status='Active',1,0)) as currently_out,
+                                   IFNULL(i.quantity_available,0) as qty_avail,
+                                   t.`condition`
+                            FROM tool t
+                            LEFT JOIN inventory i ON t.tool_id = i.tool_id
+                            LEFT JOIN transaction tr ON t.tool_id = tr.tool_id AND tr.type='Borrow' {date_filter}
+                            WHERE t.is_archived = 0
+                            GROUP BY t.tool_id, t.name, t.tag_id, i.quantity_available, t.`condition`
+                            ORDER BY total_borrowed DESC
+                        """, params)
+                        rows = [[str(r['tool_id']), r['name'], r['tag_id'],
+                                 str(r['total_borrowed']), str(r['currently_out'] or 0),
+                                 str(r['qty_avail']), r['condition']]
+                                for r in cursor.fetchall()]
+                    finally:
+                        if conn.is_connected(): cursor.close(); conn.close()
+                else:
+                    rows = getattr(self, "_usage_data", [])
 
             else:
-                data = getattr(self, "_activity_data", [])
                 title = "Employee Activity Report"
                 col_labels = ["Employee ID", "Full Name", "Role",
                               "Total Borrows", "Active", "Returned"]
-                rows = data
+                if conn:
+                    try:
+                        cursor = conn.cursor(dictionary=True)
+                        params = []
+                        date_filter = ""
+                        if start_date:
+                            date_filter += " AND tr.borrow_date >= %s"
+                            params.append(start_date)
+                        if end_date:
+                            date_filter += " AND tr.borrow_date <= %s"
+                            params.append(end_date + " 23:59:59")
+                        cursor.execute(f"""
+                            SELECT u.employee_id, u.full_name, u.role,
+                                   COUNT(tr.transaction_id) as total_borrows,
+                                   SUM(IF(tr.status='Active',1,0)) as active_borrows,
+                                   SUM(IF(tr.status='Returned',1,0)) as returned_borrows
+                            FROM user u
+                            LEFT JOIN transaction tr ON u.user_id = tr.user_id AND tr.type='Borrow' {date_filter}
+                            GROUP BY u.user_id, u.employee_id, u.full_name, u.role
+                            ORDER BY total_borrows DESC
+                        """, params)
+                        rows = [[r['employee_id'], r['full_name'], r['role'],
+                                 str(r['total_borrows']), str(r['active_borrows'] or 0),
+                                 str(r['returned_borrows'] or 0)]
+                                for r in cursor.fetchall()]
+                    finally:
+                        if conn.is_connected(): cursor.close(); conn.close()
+                else:
+                    rows = getattr(self, "_activity_data", [])
 
             total_rows = len(rows)
-            criteria = (
-                "Current analytic dataset for active tools. Date range: None."
-                if report_type == "abc" else
-                "All available tool usage records. Date range: None."
-                if report_type == "usage" else
-                "Current employee activity history. Date range: None."
-            )
-            messagebox.showinfo(
-                "Export Criteria",
-                f"Report: {title}\nRows: {total_rows}\nCriteria: {criteria}",
-                parent=self.winfo_toplevel()
-            )
-            canvas_height = 160 + (total_rows * line_h) + 80
+
+            criteria_parts = [f"Period: {date_range_label}"]
+            if criteria_note:
+                criteria_parts.append(f"Notes: {criteria_note}")
+            criteria = "  |  ".join(criteria_parts)
+
+            canvas_height = 185 + (total_rows * line_h) + 80
 
             canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
             draw = ImageDraw.Draw(canvas)
@@ -437,15 +620,14 @@ class ReportsView(ctk.CTkFrame):
             draw.text((30, 20), "CHAMPION FINE TOOLING CORPORATION",
                       fill="#1E4528", font=font_title)
             draw.text((30, 60), title, fill="black", font=font_header)
-            draw.text(
-                (30, 90), f"Generated: {timestamp}", fill="gray", font=font_body)
-            draw.line((30, 120, canvas_width - 30, 120),
-                      fill="#1E4528", width=2)
+            draw.text((30, 90), f"Generated: {timestamp}", fill="gray", font=font_body)
+            draw.text((30, 115), criteria, fill="#444444", font=font_body)
+            draw.line((30, 145, canvas_width - 30, 145), fill="#1E4528", width=2)
 
             # Column headers
             col_x = [30 + i * ((canvas_width - 60) // len(col_labels))
                      for i in range(len(col_labels))]
-            y = 135
+            y = 160
             for j, label in enumerate(col_labels):
                 draw.text((col_x[j], y), label,
                           fill="#1E4528", font=font_header)

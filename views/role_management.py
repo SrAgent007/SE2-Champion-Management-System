@@ -88,7 +88,32 @@ class RoleManagementView(ctk.CTkFrame):
                          font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
             self.reg_pass = ctk.CTkEntry(self._reg_bottom,
                                          placeholder_text="Min. 8 characters", show="•")
-            self.reg_pass.pack(fill="x", padx=20, pady=(5, 10))
+            self.reg_pass.pack(fill="x", padx=20, pady=(5, 4))
+
+            # ── Password strength criteria ──────────────────────
+            strength_frame = ctk.CTkFrame(self._reg_bottom, fg_color="transparent")
+            strength_frame.pack(anchor="w", padx=20, pady=(0, 8))
+            GRAY = "#AAAAAA"; GREEN = "#2ECC71"
+            crit_8     = ctk.CTkLabel(strength_frame, text="✗  At least 8 characters",     font=("Inter", 10), text_color=GRAY)
+            crit_num   = ctk.CTkLabel(strength_frame, text="✗  Contains a number",           font=("Inter", 10), text_color=GRAY)
+            crit_upper = ctk.CTkLabel(strength_frame, text="✗  Contains an uppercase letter", font=("Inter", 10), text_color=GRAY)
+            crit_spec  = ctk.CTkLabel(strength_frame, text="✗  Contains a special character", font=("Inter", 10), text_color=GRAY)
+            for lbl in (crit_8, crit_num, crit_upper, crit_spec):
+                lbl.pack(anchor="w")
+
+            def _check_strength(event=None):
+                pwd = self.reg_pass.get()
+                has_8     = len(pwd) >= 8
+                has_num   = any(c.isdigit() for c in pwd)
+                has_upper = any(c.isupper() for c in pwd)
+                has_spec  = any(c in r"!@#$%^&*()_+-=[]{}|;':\",./<>?" for c in pwd)
+                crit_8.configure(    text=f"{'✓' if has_8     else '✗'}  At least 8 characters",      text_color=GREEN if has_8     else GRAY)
+                crit_num.configure(  text=f"{'✓' if has_num   else '✗'}  Contains a number",            text_color=GREEN if has_num   else GRAY)
+                crit_upper.configure(text=f"{'✓' if has_upper else '✗'}  Contains an uppercase letter", text_color=GREEN if has_upper else GRAY)
+                crit_spec.configure( text=f"{'✓' if has_spec  else '✗'}  Contains a special character", text_color=GREEN if has_spec  else GRAY)
+
+            self.reg_pass.bind("<KeyRelease>", _check_strength)
+            # ────────────────────────────────────────────────────
 
             ctk.CTkLabel(self._reg_bottom, text="Confirm Password *",
                          font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
@@ -221,7 +246,7 @@ class RoleManagementView(ctk.CTkFrame):
         for col, (h, w) in enumerate(zip(headers, weights)):
             hdr.grid_columnconfigure(col, weight=w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=8, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=8, sticky="ew")
 
         self.user_scroll = ctk.CTkScrollableFrame(
             table_card, fg_color="transparent")
@@ -281,16 +306,16 @@ class RoleManagementView(ctk.CTkFrame):
 
                 rf.grid_columnconfigure(4, weight=weights[4])
                 action_frame = ctk.CTkFrame(rf, fg_color="transparent")
-                action_frame.grid(row=0, column=4, padx=5, pady=4, sticky="w")
-                ctk.CTkButton(action_frame, text="Edit", width=50, height=28,
+                action_frame.grid(row=0, column=4, padx=8, pady=4, sticky="w")
+                ctk.CTkButton(action_frame, text="Edit", width=56, height=28,
                               fg_color="#F1C40F", text_color="black",
                               hover_color="#D4AC0D", font=("Inter", 10, "bold"),
-                              command=lambda r=row: self.open_edit_modal(r)).pack(side="left", padx=(0, 3))
-                ctk.CTkButton(action_frame, text="🔖", width=32, height=28,
+                              command=lambda r=row: self.open_edit_modal(r)).pack(side="left", padx=(0, 4))
+                ctk.CTkButton(action_frame, text="🔖 Badge", width=80, height=28,
                               fg_color="#3498DB", text_color="white",
-                              hover_color="#2980B9", font=("Inter", 12),
-                              command=lambda r=row: self.print_user_badge(r)).pack(side="left", padx=(0, 3))
-                ctk.CTkButton(action_frame, text="Delete", width=50, height=28,
+                              hover_color="#2980B9", font=("Inter", 10, "bold"),
+                              command=lambda r=row: self.print_user_badge(r)).pack(side="left", padx=(0, 4))
+                ctk.CTkButton(action_frame, text="Delete", width=56, height=28,
                               fg_color="#FFEAEA", text_color="#D8000C",
                               hover_color="#FFC0C0", font=("Inter", 10, "bold"),
                               command=lambda r=row: self.delete_user(r)).pack(side="left")

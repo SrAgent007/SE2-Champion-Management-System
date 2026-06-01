@@ -37,7 +37,7 @@ class DashboardApp(ctk.CTkToplevel):
         x = (sw - w) // 2
         y = (sh - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self.minsize(1100, 700)
+        self.minsize(1350, 750)
 
         self.protocol("WM_DELETE_WINDOW", self.confirm_logout)
 
@@ -55,8 +55,16 @@ class DashboardApp(ctk.CTkToplevel):
         self.current_frame = None
         self.current_page_name = None
         self.dashboard_refresh_job = None
-        
+        self._inactivity_job = None
+        self._warning_dialog = None
+
         self.show_frame("Dashboard")
+        self._start_inactivity_timer()
+
+        # Reset inactivity timer on any user interaction
+        self.bind_all("<Motion>", self._reset_inactivity_timer)
+        self.bind_all("<Key>", self._reset_inactivity_timer)
+        self.bind_all("<Button>", self._reset_inactivity_timer)
 
     def build_sidebar(self):
         self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0, fg_color="#1A3B22")
@@ -182,9 +190,10 @@ class DashboardApp(ctk.CTkToplevel):
         except Exception:
             self.profile_pic_label.configure(text="👤")
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=650):
+        # Use 650 as base width to prevent the split-panel table from stretching awkwardly
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(60, int((w / total) * base_width)) for w in weights]
 
     def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=35)
@@ -195,7 +204,7 @@ class DashboardApp(ctk.CTkToplevel):
         for col, (text, weight) in enumerate(zip(headers, weights)):
             header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
             ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=10, pady=5, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=5, sticky="ew")
         return header_frame
 
     def _make_row(self, parent, values, weights, bg):
@@ -213,7 +222,10 @@ class DashboardApp(ctk.CTkToplevel):
             self.after_cancel(self._clock_job)
         if hasattr(self, "dashboard_refresh_job") and self.dashboard_refresh_job:
             self.after_cancel(self.dashboard_refresh_job)
-            
+        if hasattr(self, "_inactivity_job") and self._inactivity_job:
+            self.after_cancel(self._inactivity_job)
+            self._inactivity_job = None
+
         if messagebox.askyesno("Confirm Logout", "Are you sure you want to log out of your account?"):
             log_action(self.user_info.get("user_id"), "Logout", "Authentication",
                        f"User {self.user_info.get('full_name')} logged out.")
@@ -222,6 +234,97 @@ class DashboardApp(ctk.CTkToplevel):
             self.master.pass_entry.delete(0, "end")
             self.master.error_banner.configure(text="", fg_color="transparent")
             self.master.failed_attempts = 0
+
+    # ── Inactivity Auto-Logout ───────────────────────────────────────────────
+    _INACTIVITY_MS = 5 * 60 * 1000   # 5 minutes
+    _WARNING_MS    = 30               # 30-second countdown in the warning dialog
+
+    def _start_inactivity_timer(self):
+        """Schedule the inactivity warning after 5 minutes of no activity."""
+        if self._inactivity_job:
+            self.after_cancel(self._inactivity_job)
+        self._inactivity_job = self.after(self._INACTIVITY_MS, self._show_inactivity_warning)
+
+    def _reset_inactivity_timer(self, event=None):
+        """Called on any mouse/keyboard event — restarts the 5-minute countdown."""
+        # Ignore events that originate from the warning dialog itself
+        if self._warning_dialog and self._warning_dialog.winfo_exists():
+            return
+        self._start_inactivity_timer()
+
+    def _show_inactivity_warning(self):
+        """Show a 30-second countdown warning before auto-logout."""
+        if self._warning_dialog and self._warning_dialog.winfo_exists():
+            return  # Already showing
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Inactivity Warning")
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.lift()
+
+        # Centre over the main window
+        self.update_idletasks()
+        dx = self.winfo_x() + (self.winfo_width()  - 360) // 2
+        dy = self.winfo_y() + (self.winfo_height() - 200) // 2
+        dialog.geometry(f"360x200+{dx}+{dy}")
+
+        self._warning_dialog = dialog
+        self._warning_remaining = self._WARNING_MS
+
+        ctk.CTkLabel(dialog, text="⚠ Session Inactivity",
+                     font=("Inter", 15, "bold"), text_color="#C0392B").pack(pady=(20, 4))
+        ctk.CTkLabel(dialog, text="You have been inactive for 5 minutes.",
+                     font=("Inter", 11), text_color="#555555").pack()
+
+        self._countdown_label = ctk.CTkLabel(dialog,
+                     text=f"Logging out in {self._warning_remaining} seconds…",
+                     font=("Inter", 12), text_color="#333333")
+        self._countdown_label.pack(pady=(10, 16))
+
+        ctk.CTkButton(dialog, text="Stay Logged In", width=160,
+                      fg_color="#1E4528", hover_color="#14301C",
+                      font=("Inter", 12, "bold"),
+                      command=lambda: self._cancel_inactivity_logout(dialog)).pack()
+
+        self._tick_warning()
+
+    def _tick_warning(self):
+        """Decrement the countdown every second; logout when it hits 0."""
+        if not (self._warning_dialog and self._warning_dialog.winfo_exists()):
+            return
+        if self._warning_remaining <= 0:
+            self._warning_dialog.destroy()
+            self._warning_dialog = None
+            self._force_logout()
+            return
+        self._countdown_label.configure(
+            text=f"Logging out in {self._warning_remaining} seconds…")
+        self._warning_remaining -= 1
+        self._inactivity_job = self.after(1000, self._tick_warning)
+
+    def _cancel_inactivity_logout(self, dialog):
+        """User clicked 'Stay Logged In' — dismiss warning and restart timer."""
+        if dialog.winfo_exists():
+            dialog.destroy()
+        self._warning_dialog = None
+        self._start_inactivity_timer()
+
+    def _force_logout(self):
+        """Perform silent auto-logout after inactivity timeout."""
+        if hasattr(self, "_clock_job"):
+            self.after_cancel(self._clock_job)
+        if hasattr(self, "dashboard_refresh_job") and self.dashboard_refresh_job:
+            self.after_cancel(self.dashboard_refresh_job)
+            self.dashboard_refresh_job = None
+        log_action(self.user_info.get("user_id"), "Auto-Logout", "Authentication",
+                   f"Session expired due to inactivity — {self.user_info.get('full_name')}.")
+        self.destroy()
+        self.master.deiconify()
+        self.master.pass_entry.delete(0, "end")
+        self.master.error_banner.configure(text="", fg_color="transparent")
+        self.master.failed_attempts = 0
+    # ── End Inactivity Auto-Logout ───────────────────────────────────────────
 
     def show_frame(self, page_name):
         self.current_page_name = page_name
@@ -401,20 +504,24 @@ class DashboardApp(ctk.CTkToplevel):
         ctk.CTkLabel(c2, text="Active Workforce", font=("Inter", 13, "bold"), text_color="white").pack(anchor="w", padx=20)
         ctk.CTkLabel(c2, text="Employees currently deployed", font=("Inter", 11), text_color="white").pack(anchor="w", padx=20)
 
-        # 3. Action Items Card
+        # 3. Action Items Card — fully clickable, navigates to Maintenance
         c3_bg = "#FFF5F5" if metrics["action_items"] > 0 else "#F9FAFB"
         c3_border = "#D8000C" if metrics["action_items"] > 0 else "#E0E0E0"
         self.dash_action_card = ctk.CTkFrame(cards_frame, fg_color=c3_bg, corner_radius=10, height=130, border_width=1, border_color=c3_border)
         self.dash_action_card.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
         self.dash_action_card.pack_propagate(False)
-        
+
         self.dash_action_top = ctk.CTkFrame(self.dash_action_card, fg_color="transparent")
         self.dash_action_top.pack(fill="x", padx=20, pady=(15, 0))
-        
+
         self._render_action_badges(metrics)
 
         ctk.CTkLabel(self.dash_action_card, text="Action Items", font=("Inter", 13, "bold"), text_color="black").pack(anchor="w", padx=20, pady=(10, 0))
-        ctk.CTkLabel(self.dash_action_card, text="Requires immediate attention", font=("Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(2, 12))
+        lbl_hint = ctk.CTkLabel(self.dash_action_card, text="Click to view in Maintenance →", font=("Inter", 11), text_color="#888888")
+        lbl_hint.pack(anchor="w", padx=20, pady=(2, 12))
+
+        # Bind entire card tree to navigate to Maintenance
+        self._bind_widget_tree(self.dash_action_card, lambda *_: self.show_frame("Maintenance"))
 
         # 4. Total Inventory Card
         c4 = ctk.CTkFrame(cards_frame, fg_color="#F1C40F", corner_radius=10, height=100)
@@ -424,6 +531,10 @@ class DashboardApp(ctk.CTkToplevel):
         self.dash_inv_lbl.pack(anchor="w", padx=20, pady=(15, 0))
         ctk.CTkLabel(c4, text="Total Inventory", font=("Inter", 13, "bold"), text_color="black").pack(anchor="w", padx=20)
         ctk.CTkLabel(c4, text="Total physical items logged", font=("Inter", 11), text_color="black").pack(anchor="w", padx=20)
+
+        # ── Overdue Projects Alert ───────────────────────────────
+        self._build_overdue_section(inner_frame)
+        # ────────────────────────────────────────────────────────
 
         # Bottom Split (Activity Feed & Chart)
         bottom_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
@@ -460,9 +571,19 @@ class DashboardApp(ctk.CTkToplevel):
         
         return frame
 
+    def _bind_widget_tree(self, widget, callback):
+        """Recursively set cursor and bind <Button-1> on a widget and all its children."""
+        try:
+            widget.configure(cursor="hand2")
+            widget.bind("<Button-1>", callback)
+        except Exception:
+            pass
+        for child in widget.winfo_children():
+            self._bind_widget_tree(child, callback)
+
     def _render_action_badges(self, metrics):
         for w in self.dash_action_top.winfo_children(): w.destroy()
-        
+
         if metrics["action_items"] == 0:
             ctk.CTkLabel(self.dash_action_top, text="0", font=("Inter", 28, "bold"), text_color="black").pack(side="left")
             ctk.CTkLabel(self.dash_action_top, text="✓ All Clear", fg_color="#2ECC71", text_color="white", font=("Inter", 11, "bold"), corner_radius=6, padx=10, pady=3).pack(side="left", padx=(15, 0), pady=(5,0))
@@ -470,12 +591,16 @@ class DashboardApp(ctk.CTkToplevel):
         else:
             ctk.CTkLabel(self.dash_action_top, text=str(metrics['action_items']), font=("Inter", 28, "bold"), text_color="#D8000C").pack(side="left")
             self.dash_action_card.configure(fg_color="#FFF5F5", border_color="#D8000C")
-            
+
             if metrics['pending_issues'] > 0:
                 ctk.CTkLabel(self.dash_action_top, text=f"⚠ {metrics['pending_issues']} Tools Need Maint.", fg_color="#D8000C", text_color="white", font=("Inter", 10, "bold"), corner_radius=6, padx=8, pady=3).pack(side="left", padx=(10, 0), pady=(5,0))
-                
+
             if metrics['overdue_projects'] > 0:
                 ctk.CTkLabel(self.dash_action_top, text=f"⚠ {metrics['overdue_projects']} Overdue", fg_color="#D8000C", text_color="white", font=("Inter", 10, "bold"), corner_radius=6, padx=8, pady=3).pack(side="left", padx=(5, 0), pady=(5,0))
+
+        # Re-apply click binding after badge content is rebuilt
+        if hasattr(self, "dash_action_card"):
+            self._bind_widget_tree(self.dash_action_top, lambda *_: self.show_frame("Maintenance"))
 
     def _render_activity_feed(self, activities):
         for w in self.dash_activity_frame.winfo_children(): w.destroy()
@@ -545,15 +670,82 @@ class DashboardApp(ctk.CTkToplevel):
         # Re-trigger background loop
         self.dashboard_refresh_job = self.after(5000, self._auto_refresh_dashboard)
 
+    def _build_overdue_section(self, parent):
+        overdue = []
+        conn = get_connection()
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                try:
+                    cursor.execute("""
+                        SELECT name, client, end_date, status,
+                               DATEDIFF(CURDATE(), end_date) as days_overdue
+                        FROM projects
+                        WHERE status NOT IN ('Completed', 'Cancelled')
+                          AND end_date < CURDATE()
+                        ORDER BY end_date ASC LIMIT 5
+                    """)
+                    overdue = cursor.fetchall()
+                except Exception:
+                    cursor.execute("""
+                        SELECT name, client, end_date, status,
+                               DATEDIFF(CURDATE(), end_date) as days_overdue
+                        FROM project
+                        WHERE status NOT IN ('Completed', 'Cancelled')
+                          AND end_date < CURDATE()
+                        ORDER BY end_date ASC LIMIT 5
+                    """)
+                    overdue = cursor.fetchall()
+            except Exception:
+                pass
+            finally:
+                if conn.is_connected():
+                    cursor.close()
+                    conn.close()
+
+        if not overdue:
+            return
+
+        card = ctk.CTkFrame(parent, fg_color="white", corner_radius=10,
+                            border_width=1, border_color="#FFCCCC")
+        card.pack(fill="x", pady=(0, 12))
+
+        hdr = ctk.CTkFrame(card, fg_color="#FFF5F5", corner_radius=0)
+        hdr.pack(fill="x")
+        ctk.CTkLabel(hdr, text=f"⚠  {len(overdue)} Overdue Project(s) — Requires Immediate Attention",
+                     font=("Inter", 12, "bold"), text_color="#D8000C").pack(anchor="w", padx=20, pady=10)
+
+        for i, p in enumerate(overdue):
+            row_bg = "#FFFAFA" if i % 2 == 0 else "white"
+            row = ctk.CTkFrame(card, fg_color=row_bg, corner_radius=0)
+            row.pack(fill="x")
+            row.grid_columnconfigure(0, weight=3)
+            row.grid_columnconfigure(1, weight=2)
+            row.grid_columnconfigure(2, weight=1)
+            row.grid_columnconfigure(3, weight=1)
+            ctk.CTkLabel(row, text=p["name"], font=("Inter", 11, "bold"),
+                         text_color="#1A1A1A").grid(row=0, column=0, padx=20, pady=8, sticky="w")
+            ctk.CTkLabel(row, text=p.get("client", "—"), font=("Inter", 11),
+                         text_color="#555555").grid(row=0, column=1, padx=10, pady=8, sticky="w")
+            ctk.CTkLabel(row, text=f"Due: {p['end_date']}", font=("Inter", 11),
+                         text_color="#888888").grid(row=0, column=2, padx=10, pady=8, sticky="w")
+            ctk.CTkLabel(row, text=f"{p['days_overdue']}d late", font=("Inter", 11, "bold"),
+                         text_color="#D8000C").grid(row=0, column=3, padx=20, pady=8, sticky="e")
+
+        ctk.CTkButton(card, text="→ Go to Project Management", fg_color="transparent",
+                      text_color="#D8000C", hover_color="#FFF0F0", font=("Inter", 11, "bold"),
+                      anchor="w", command=lambda: self.show_frame("Project Management")
+                      ).pack(anchor="w", padx=14, pady=(0, 8))
+
     def embed_chart(self, parent_frame, chart_data):
-        fig, ax = plt.subplots(figsize=(5, 3), dpi=100)
+        fig, ax = plt.subplots(figsize=(4.5, 2.6), dpi=90)
         fig.patch.set_facecolor("#FFFFFF")
         ax.set_facecolor("#FFFFFF")
 
         categories = ["Good", "Repair", "Damaged", "Lost"]
         colors = ["#2ECC71", "#F1C40F", "#E67E22", "#95A5A6"]
 
-        bars = ax.bar(categories, chart_data, color=colors, width=0.6)
+        bars = ax.bar(categories, chart_data, color=colors, width=0.5)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_visible(False)
@@ -566,7 +758,7 @@ class DashboardApp(ctk.CTkToplevel):
                     int(yval), ha="center", va="bottom",
                     fontdict={"family": "sans-serif", "weight": "bold", "color": "#333333"})
 
-        plt.tight_layout()
+        fig.subplots_adjust(left=0.05, right=0.95, top=0.85, bottom=0.15)
         canvas = FigureCanvasTkAgg(fig, master=parent_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=20, pady=(0, 20))

@@ -24,15 +24,6 @@ class InventoryView(ctk.CTkFrame):
 
         ctk.CTkLabel(top_bar, text="Products / Inventory", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
-        tabs = ["📦 Active Inventory", "🗄️ Archived Items"]
-        self.tab_var = ctk.StringVar(value=tabs[0])
-
-        self.seg_btn = ctk.CTkSegmentedButton(
-            top_bar, values=tabs, variable=self.tab_var, command=self.switch_tab,
-            fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
-        )
-        self.seg_btn.pack(side="right")
-
         # 3. Global UI Fix: Scrollable content area mapping
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
         self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
@@ -41,24 +32,22 @@ class InventoryView(ctk.CTkFrame):
         self.tab_content.grid_columnconfigure(1, weight=2, minsize=600) # Right Table
         self.tab_content.grid_rowconfigure(0, weight=1)
 
-        self.switch_tab(tabs[0])
+        self.switch_tab()
 
-    def switch_tab(self, selected_tab):
+    def switch_tab(self):
         for widget in self.tab_content.winfo_children():
             widget.destroy()
 
         self.build_left_form(self.tab_content)
         self.build_right_table(self.tab_content)
         self.load_inventory_data()
-        self.load_dynamic_dropdowns() 
+        self.load_dynamic_dropdowns()
         self.name_entry.focus_set()
 
     def build_left_form(self, parent):
         form_card = ctk.CTkScrollableFrame(parent, fg_color="white", corner_radius=10, width=380)
         form_card.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
-        tab_state = "Archived" if "Archived" in self.tab_var.get() else "Active"
-        
         ctk.CTkLabel(form_card, text="Add New Item", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(20, 10))
 
         row_type = ctk.CTkFrame(form_card, fg_color="transparent")
@@ -131,11 +120,6 @@ class InventoryView(ctk.CTkFrame):
         ctk.CTkButton(btn_row, text="Save Item", fg_color="#1E4528", hover_color="#14301C", font=("Inter", 12, "bold"), command=self.validate_and_save).grid(row=0, column=0, padx=(0, 5), sticky="ew")
         ctk.CTkButton(btn_row, text="Clear", fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 12, "bold"), command=self.clear_form).grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
-        if tab_state == "Archived":
-            # Optional: Dim out controls when looking at archived to guide UX
-            for widget in [self.name_entry, self.desc_entry, self.price_entry, self.qty_entry, self.loc_entry, self.cat_menu, self.sup_menu]:
-                widget.configure(state="disabled")
-
     def load_dynamic_dropdowns(self):
         conn = get_connection()
         if not conn: return
@@ -154,15 +138,17 @@ class InventoryView(ctk.CTkFrame):
             self.sup_menu.configure(values=sups)
             self.cat_menu.set("Type or select...")
             self.sup_menu.set("Type or select...")
-            
         except Exception as e:
             print(f"Dropdown Load Error: {e}")
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=None):
+        # Use standard base_width to prevent layout exploding on wide screens
+        if base_width is None:
+            base_width = 900
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(80, int((w / total) * base_width)) for w in weights]
 
     def _make_table_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
@@ -172,7 +158,7 @@ class InventoryView(ctk.CTkFrame):
         min_sizes = self._get_column_min_sizes(weights)
         for col, (text, weight) in enumerate(zip(headers, weights)):
             header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
         return header_frame
 
     def _make_table_row(self, parent, values, weights, bg):
@@ -218,8 +204,7 @@ class InventoryView(ctk.CTkFrame):
             widget.destroy()
         self.tool_hash_table.clear()
 
-        # Check which tab we're on to modify logic
-        is_archived = 1 if "Archived" in self.tab_var.get() else 0
+        is_archived = 0
 
         conn = get_connection()
         if not conn:
@@ -372,7 +357,7 @@ class InventoryView(ctk.CTkFrame):
         data = self.tool_hash_table.get(lookup_id)
         if not data: return
         
-        is_arch = 1 if "Archived" in self.tab_var.get() else 0
+        is_arch = 0  # Archived items are now managed exclusively in the Maintenance module
 
         modal = ctk.CTkToplevel(self)
         modal.title(f"Manage Item: {lookup_id}")

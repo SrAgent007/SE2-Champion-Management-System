@@ -201,12 +201,17 @@ class BorrowingView(ctk.CTkFrame):
         total_days    = _cal_mod.monthrange(self._cal_year, self._cal_month)[1]
         STATUS_COLORS_EXT = {**STATUS_COLORS, "Completed": "#95A5A6"}
 
+        # Pre-enforce uniform row heights for all rows in this month's grid
+        for r in range(6):
+            grid_f.grid_rowconfigure(r, minsize=74)
+
         col, row_idx = first_weekday, 0
 
-        # blank leading cells
-        for _ in range(first_weekday):
-            ctk.CTkFrame(grid_f, fg_color="transparent", height=74).grid(
-                row=0, column=col - first_weekday + _, padx=2, pady=2, sticky="nsew")
+        # blank leading cells — grid_propagate(False) enforces height=74
+        for c in range(first_weekday):
+            blank = ctk.CTkFrame(grid_f, fg_color="transparent", height=74)
+            blank.grid(row=0, column=c, padx=2, pady=2, sticky="nsew")
+            blank.grid_propagate(False)
 
         for day in range(1, total_days + 1):
             cur_date = _date(self._cal_year, self._cal_month, day)
@@ -247,6 +252,16 @@ class BorrowingView(ctk.CTkFrame):
                     ctk.CTkLabel(dots, text=f"+{len(projs)-4}",
                                  font=("Inter", 8), text_color="#888888").pack(side="left")
 
+            col += 1
+            if col == 7:
+                col = 0
+                row_idx += 1
+
+        # trailing blank cells to pad the last row to full width
+        while row_idx < 6:
+            blank = ctk.CTkFrame(grid_f, fg_color="transparent", height=74)
+            blank.grid(row=row_idx, column=col, padx=2, pady=2, sticky="nsew")
+            blank.grid_propagate(False)
             col += 1
             if col == 7:
                 col = 0
@@ -426,9 +441,9 @@ class BorrowingView(ctk.CTkFrame):
 
         ctk.CTkButton(form_card, text="Confirm Retrieval & Restock", height=40, fg_color="#F1C40F", text_color="black", hover_color="#D4AC0D", font=("Inter", 13, "bold"), command=self.execute_return).pack(fill="x", padx=20, pady=(0, 20))
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=900):
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(80, int((w / total) * base_width)) for w in weights]
 
     def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
@@ -438,7 +453,7 @@ class BorrowingView(ctk.CTkFrame):
         min_sizes = self._get_column_min_sizes(weights)
         for col, (text, weight) in enumerate(zip(headers, weights)):
             header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
         return header_frame
 
     def _make_row(self, parent, values, weights, bg):

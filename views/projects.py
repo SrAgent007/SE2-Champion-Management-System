@@ -50,15 +50,6 @@ class ProjectsView(ctk.CTkFrame):
 
         ctk.CTkLabel(top_bar, text="Project Management", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
-        tabs = ["📋 Active Projects"]
-        self.tab_var = ctk.StringVar(value=tabs[0])
-
-        self.seg_btn = ctk.CTkSegmentedButton(
-            top_bar, values=tabs, variable=self.tab_var,
-            fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
-        )
-        self.seg_btn.pack(side="right")
-
         self.inner = ctk.CTkFrame(self, fg_color="transparent")
         self.inner.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.inner.grid_columnconfigure(0, weight=1, minsize=380) 
@@ -189,9 +180,9 @@ class ProjectsView(ctk.CTkFrame):
             self.workers_list.pop(idx)
             self._refresh_worker_tags()
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=900):
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(80, int((w / total) * base_width)) for w in weights]
 
     def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
@@ -507,12 +498,11 @@ class ProjectsView(ctk.CTkFrame):
         if not conn: return
         try:
             cursor = conn.cursor(dictionary=True)
-            # --- BUG FIX: Added WHERE p.archived_at IS NULL to hide it from active list ---
             sql = '''
                 SELECT p.*, a.full_name as admin_approver,
-                       CASE 
+                       CASE
                            WHEN p.status IN ('Approved', 'Ongoing') AND p.end_date < CURDATE() THEN CONCAT(p.status, ' (OVERDUE)')
-                           ELSE p.status 
+                           ELSE p.status
                        END as display_status
                 FROM projects p
                 LEFT JOIN user a ON p.approved_by = a.user_id
@@ -522,10 +512,10 @@ class ProjectsView(ctk.CTkFrame):
             if search_q:
                 sql += " AND (p.name LIKE %s OR p.client LIKE %s OR p.project_head LIKE %s)"
                 params = [f"%{search_q}%", f"%{search_q}%", f"%{search_q}%"]
-                
+
             sql += " ORDER BY p.project_id DESC"
             cursor.execute(sql, tuple(params))
-            
+
             for i, row in enumerate(cursor.fetchall()):
                 row["status"] = row["display_status"]
                 vals = [str(row["project_id"]), row["name"], row["client"], row.get("project_head") or "—", row["status"], ""]
@@ -541,6 +531,8 @@ class ProjectsView(ctk.CTkFrame):
                 btn_text = "Review" if row['status'] == 'Pending' else "View"
                 ctk.CTkButton(rf, text=btn_text, width=65, height=28, fg_color=btn_color, hover_color="#2980B9", font=("Inter", 11, "bold"), command=lambda r=row: self.open_project_modal(r)).grid(row=0, column=5, padx=10, pady=10, sticky="w")
 
+        except Exception as e:
+            ctk.CTkLabel(self.project_scroll, text=f"Error loading projects: {e}", text_color="red").pack(pady=20)
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 

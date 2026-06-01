@@ -44,10 +44,6 @@ class TaggingView(ctk.CTkFrame):
         self.scan_test_btn = ctk.CTkButton(search_frame, text="📷 Scan & Test QR", width=140, fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 11, "bold"), command=self.open_test_scanner)
         self.scan_test_btn.pack(side="right", padx=10)
 
-        table_header = ctk.CTkFrame(main_frame, fg_color="#1E4528", corner_radius=5, height=40)
-        table_header.pack(fill="x", padx=(20, 36))
-        table_header.pack_propagate(False)
-
         self.headers = ["PID", "Name", "Category", "Supplier", "Qty", "Location", "Status", "Tag ID"]
         self.weights = [1, 2, 2, 2, 1, 2, 1, 2]
 
@@ -56,9 +52,9 @@ class TaggingView(ctk.CTkFrame):
         self.data_scroll = ctk.CTkScrollableFrame(main_frame, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(10, 20))
 
-    def _get_column_min_sizes(self, weights, base_width=1100):
+    def _get_column_min_sizes(self, weights, base_width=900):
         total = sum(weights) or 1
-        return [max(90, int((w / total) * base_width)) for w in weights]
+        return [max(80, int((w / total) * base_width)) for w in weights]
 
     def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         header = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
@@ -68,7 +64,7 @@ class TaggingView(ctk.CTkFrame):
         min_sizes = self._get_column_min_sizes(weights)
         for col, (text, weight) in enumerate(zip(headers, weights)):
             header.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
+            ctk.CTkLabel(header, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
         return header
 
     def _make_row(self, parent, values, weights, bg):

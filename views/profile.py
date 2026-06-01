@@ -81,7 +81,7 @@ class ProfileView(ctk.CTkFrame):
     def build_right_cards(self):
         right_container = ctk.CTkFrame(self, fg_color="transparent")
         right_container.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
-        right_container.grid_rowconfigure(0, weight=1)
+        right_container.grid_rowconfigure(0, weight=0)
         right_container.grid_rowconfigure(1, weight=1)
 
         edit_card = ctk.CTkFrame(
@@ -138,7 +138,7 @@ class ProfileView(ctk.CTkFrame):
         for col, (h, w) in enumerate(zip(headers, weights)):
             hdr.grid_columnconfigure(col, weight=w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white").grid(row=0, column=col, padx=8, pady=6, sticky="w")
+                         text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=6, sticky="ew")
 
         scroll = ctk.CTkScrollableFrame(
             history_card, fg_color="transparent", height=150)
@@ -347,5 +347,5 @@ class ProfileView(ctk.CTkFrame):
 
         ctk.CTkButton(btn_frame, text="Change Password", fg_color="#1E4528", hover_color="#14301C",
                       command=process_pwd_change).pack(side="left", expand=True, fill="x", padx=(0, 10))
-        ctk.CTkButton(btn_frame, text="Cancel", fg_color="#E0E0E0", text_color="black",
-                      hover_color="#CCCCCC", command=dialog.destroy).pack(side="right", width=80)
+        ctk.CTkButton(btn_frame, text="Cancel", width=80, fg_color="#E0E0E0", text_color="black",
+                      hover_color="#CCCCCC", command=dialog.destroy).pack(side="right")
