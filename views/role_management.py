@@ -7,6 +7,7 @@ import os
 import tempfile
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
+import re
 
 
 class RoleManagementView(ctk.CTkFrame):
@@ -55,7 +56,6 @@ class RoleManagementView(ctk.CTkFrame):
             e.pack(fill="x", padx=20, pady=(5, 10))
             return e
 
-        self.reg_emp_id = field(form_card, "Employee ID *", "e.g., EMP-001")
         self.reg_name   = field(form_card, "Full Name *",   "Juan Dela Cruz")
         self.reg_email  = field(form_card, "Email Address", "employee@champion.com")
 
@@ -138,71 +138,84 @@ class RoleManagementView(ctk.CTkFrame):
         self._build_reg_bottom(role)
 
     def execute_register(self):
-        emp_id = self.reg_emp_id.get().strip()
-        name   = self.reg_name.get().strip()
-        email  = self.reg_email.get().strip()
-        role   = self.reg_role.get()
-        pwd    = self.reg_pass.get().strip()    if self.reg_pass    else ""
-        cpwd   = self.reg_confirm.get().strip() if self.reg_confirm else ""
+        # Removed emp_id = self.reg_emp_id.get().strip()
+        name = self.reg_name.get().strip()
+        email = self.reg_email.get().strip()
+        role = self.reg_role.get()
+        pwd = self.reg_pass.get().strip()
+        cpwd = self.reg_confirm.get().strip()
 
-        if not emp_id or not name:
-            messagebox.showerror("Validation Error",
-                                 "Employee ID and Full Name are required.",
-                                 parent=self.winfo_toplevel())
-            return
-
-        if role != "Worker":
-            if not pwd or not cpwd:
-                messagebox.showerror("Validation Error",
-                                     "Password is required for Staff and Admin accounts.",
-                                     parent=self.winfo_toplevel())
-                return
-            if pwd != cpwd:
-                messagebox.showerror("Password Mismatch", "Passwords do not match.",
-                                     parent=self.winfo_toplevel())
-                return
-            if len(pwd) < 8:
-                messagebox.showerror("Weak Password", "Password must be at least 8 characters.",
-                                     parent=self.winfo_toplevel())
-                return
-            hashed = bcrypt.hashpw(pwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        # 1. Validation without Employee ID
+        if role == "Worker":
+            if not name:
+                return messagebox.showerror("Validation Error", "Full Name is required for Workers.", parent=self.winfo_toplevel())
+            pwd = "FIELD_WORKER_NO_LOGIN_SYSTEM_LOCKED" 
+            cpwd = pwd
         else:
-            # Workers have no login — store an unguessable placeholder hash
-            hashed = bcrypt.hashpw(secrets.token_bytes(32), bcrypt.gensalt()).decode("utf-8")
+            if not all([name, pwd, cpwd]):
+                return messagebox.showerror("Validation Error", "Full Name and Password are required.", parent=self.winfo_toplevel())
+            if pwd != cpwd:
+                return messagebox.showerror("Password Mismatch", "Passwords do not match.", parent=self.winfo_toplevel())
+            if len(pwd) < 8:
+                return messagebox.showerror("Weak Password", "Password must be at least 8 characters.", parent=self.winfo_toplevel())
 
         conn = get_connection()
-        if not conn:
-            return
+        if not conn: return
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT user_id FROM user WHERE employee_id = %s", (emp_id,))
-            if cursor.fetchone():
-                messagebox.showerror("Duplicate",
-                                     "An account with that Employee ID already exists.",
-                                     parent=self.winfo_toplevel())
-                return
-
-            cursor.execute("""
-                INSERT INTO user (employee_id, full_name, email, password_hash, role)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (emp_id, name, email or None, hashed, role))
+            cursor = conn.cursor(dictionary=True)
+            
+            # --- 2. THE AUTO-GENERATION ENGINE ---
+            prefix = ""
+            if role == "Admin": prefix = "ADM"
+            elif role == "Staff": prefix = "STF"
+            elif role == "Worker": prefix = "WKR"
+            
+            from datetime import datetime
+            current_year = datetime.now().year
+            
+            # Find the highest existing ID for this specific role and year
+            search_pattern = f"{prefix}-{current_year}-%"
+            cursor.execute("SELECT employee_id FROM user WHERE employee_id LIKE %s ORDER BY employee_id DESC LIMIT 1", (search_pattern,))
+            last_record = cursor.fetchone()
+            
+            if last_record and last_record['employee_id']:
+                # Extract the last 3 digits and add 1
+                last_seq = int(last_record['employee_id'].split('-')[-1])
+                new_seq = last_seq + 1
+            else:
+                new_seq = 1 # Start at 001 if no users exist for this year
+                
+            # Combine them into the final format (e.g., ADM-2026-004)
+            new_emp_id = f"{prefix}-{current_year}-{new_seq:03d}"
+            
+            # --- 3. SAVE TO DATABASE ---
+            import bcrypt
+            hashed_pw = bcrypt.hashpw(pwd.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            cursor.execute("INSERT INTO user (employee_id, full_name, email, role, password_hash) VALUES (%s, %s, %s, %s, %s)",
+                           (new_emp_id, name, email, role, hashed_pw))
             conn.commit()
-
-            messagebox.showinfo("Success", f"Account registered successfully as {role}.",
-                                parent=self.winfo_toplevel())
-            self.clear_form()
+            
+            if self.user_info.get("user_id"):
+                log_action(self.user_info['user_id'], "Added", "Role Management", f"Registered new {role}: {name} ({new_emp_id})")
+                
+            # Announce the generated ID to the Admin
+            messagebox.showinfo("Registration Success", f"{role} registered successfully!\n\nSystem Assigned ID: {new_emp_id}", parent=self.winfo_toplevel())
+            
+            # Reset UI
+            self.reg_name.delete(0, 'end')
+            self.reg_email.delete(0, 'end')
+            self.reg_pass.delete(0, 'end')
+            self.reg_confirm.delete(0, 'end')
+            
             self.load_user_table()
+            
         except Exception as e:
-            messagebox.showerror("Database Error", str(e),
-                                 parent=self.winfo_toplevel())
+            messagebox.showerror("Database Error", str(e), parent=self.winfo_toplevel())
         finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
+            if conn.is_connected(): cursor.close(); conn.close()
 
     def clear_form(self):
-        self.reg_emp_id.delete(0, "end")
         self.reg_name.delete(0, "end")
         self.reg_email.delete(0, "end")
         self.reg_role.set("Staff")

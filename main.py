@@ -8,6 +8,8 @@ import bcrypt
 from database import get_connection, log_action
 from dashboard import DashboardApp
 from database import log_action
+import cv2
+from pyzbar.pyzbar import decode, ZBarSymbol
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
@@ -59,13 +61,28 @@ class LoginApp(ctk.CTk):
         ctk.CTkLabel(self.content_frame, text="Automated Management System",
                      font=("Inter", 16), text_color="#888888").pack(pady=(0, 20))
 
-        self.user_entry = ctk.CTkEntry(self.content_frame,
-                                       placeholder_text="Employee ID (Username)",
-                                       width=280, height=40, corner_radius=6,
+        # --- THE USERNAME FIELD & SCAN BUTTON ---
+        self.user_frame_container = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.user_frame_container.pack(pady=(0, 15))
+
+        self.user_entry = ctk.CTkEntry(self.user_frame_container,
+                                       placeholder_text="Employee ID (e.g. ADM-2026-001)",
+                                       width=215, height=40, corner_radius=6,
                                        fg_color="#F9FAFB", border_color="#D1D5DB",
                                        text_color="black")
-        self.user_entry.pack(pady=(0, 15))
+        self.user_entry.pack(side="left", padx=(0, 5))
         self.user_entry.bind("<Return>", lambda e: self.pass_entry.focus())
+
+        self.scan_btn = ctk.CTkButton(self.user_frame_container, text="📷 Scan", width=60, height=40,
+                                      fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 12, "bold"),
+                                      command=self.open_scanner)
+        self.scan_btn.pack(side="right")
+        
+        # Intercept scanner carriage return to drop focus instantly to password
+        self.user_entry.bind("<Return>", lambda e: self.pass_entry.focus_set())
+        
+        # Set window focus to this entry field immediately upon application startup
+        self.user_entry.focus_set()
 
         self.pass_frame = ctk.CTkFrame(
             self.content_frame, fg_color="transparent", width=280, height=40)
@@ -391,6 +408,64 @@ class LoginApp(ctk.CTk):
                       command=send_reset_request).pack(side="left", expand=True, fill="x", padx=(0, 10))
         ctk.CTkButton(btn_frame, text="Cancel", width=80, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
                       command=dialog.destroy).pack(side="right")
+
+    def open_scanner(self):
+        self.scanner_window = ctk.CTkToplevel(self)
+        self.scanner_window.title("Scan ID Badge")
+        self.center_window(self.scanner_window, 450, 500)
+        self.scanner_window.attributes("-topmost", True)
+        self.scanner_window.grab_set()
+        self.scanner_window.protocol("WM_DELETE_WINDOW", self.close_scanner)
+
+        ctk.CTkLabel(self.scanner_window, text="Align your QR ID Badge with the camera", font=("Inter", 14, "bold"), text_color="#1A1A1A").pack(pady=(20, 10))
+
+        self.video_label = ctk.CTkLabel(self.scanner_window, text="Initializing camera feed...", font=("Inter", 12), text_color="gray")
+        self.video_label.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        # Initialize laptop webcam (0 is the default camera)
+        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        
+        # Limit resolution for lightning-fast QR processing
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.scan_loop()
+
+    def scan_loop(self):
+        if not hasattr(self, 'cap') or not self.cap.isOpened():
+            return
+        
+        ret, frame = self.cap.read()
+        if ret:
+            # Check the frame for QR Codes
+            decoded_objects = decode(frame, symbols=[ZBarSymbol.QRCODE])
+            for obj in decoded_objects:
+                qr_data = obj.data.decode('utf-8')
+                
+                # We caught an ID! Stop the camera and fill the box.
+                self.user_entry.delete(0, 'end')
+                self.user_entry.insert(0, qr_data)
+                self.close_scanner()
+                self.pass_entry.focus_set()
+                return  # Kill the loop instantly
+
+            # If no QR code, convert the OpenCV frame to Tkinter format and display it
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(cv2image)
+            ctk_img = ctk.CTkImage(light_image=img, size=(400, 300))
+            
+            self.video_label.configure(image=ctk_img, text="")
+        
+        # Loop every 15 milliseconds for a smooth video feed
+        self.scanner_job = self.after(15, self.scan_loop)
+
+    def close_scanner(self):
+        """Safely shuts down the hardware camera and destroys the window."""
+        if hasattr(self, 'scanner_job'):
+            self.after_cancel(self.scanner_job)
+        if hasattr(self, 'cap') and self.cap.isOpened():
+            self.cap.release()
+        if hasattr(self, 'scanner_window') and self.scanner_window.winfo_exists():
+            self.scanner_window.destroy()
 
     def on_closing(self):
         if messagebox.askyesno("Exit Application", "Close the entire system?"):
