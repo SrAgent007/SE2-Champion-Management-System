@@ -48,7 +48,7 @@ class BorrowingView(ctk.CTkFrame):
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
         self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1, minsize=380) # Left Form
-        self.tab_content.grid_columnconfigure(1, weight=2, minsize=600) # Right History Table
+        self.tab_content.grid_columnconfigure(1, weight=2, minsize=750) # Right History Table
         self.tab_content.grid_rowconfigure(0, weight=1)
         
         self.switch_tab(tabs[0])
@@ -441,31 +441,6 @@ class BorrowingView(ctk.CTkFrame):
 
         ctk.CTkButton(form_card, text="Confirm Retrieval & Restock", height=40, fg_color="#F1C40F", text_color="black", hover_color="#D4AC0D", font=("Inter", 13, "bold"), command=self.execute_return).pack(fill="x", padx=20, pady=(0, 20))
 
-    def _get_column_min_sizes(self, weights, base_width=900):
-        total = sum(weights) or 1
-        return [max(80, int((w / total) * base_width)) for w in weights]
-
-    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
-        header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
-        header_frame.pack(fill="x", padx=(pad_left, pad_right))
-        header_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (text, weight) in enumerate(zip(headers, weights)):
-            header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
-        return header_frame
-
-    def _make_row(self, parent, values, weights, bg):
-        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=40)
-        row_frame.pack(fill="x", pady=2)
-        row_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (val, weight) in enumerate(zip(values, weights)):
-            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-        return row_frame
-
     def build_history_table(self, parent):
         table_card = ctk.CTkFrame(parent, fg_color="white", corner_radius=10)
         table_card.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
@@ -486,11 +461,6 @@ class BorrowingView(ctk.CTkFrame):
                       hover_color="#CCCCCC", font=("Inter", 11, "bold"),
                       command=self.load_transaction_history).pack(side="right")
 
-        self.headers = ["Type", "Item Name", "Tag ID", "Qty", "Assignee", "Date & Time", "Status"]
-        self.weights = [1, 2, 2, 1, 2, 2, 1]
-
-        self._make_header(table_card, self.headers, self.weights, pad_left=20, pad_right=36)
-
         self.data_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(10, 20))
 
@@ -498,9 +468,32 @@ class BorrowingView(ctk.CTkFrame):
 
     def load_transaction_history(self):
         for widget in self.data_scroll.winfo_children(): widget.destroy()
+
+        # Hard-Bounded Uniform Grid setup
+        table_inner = ctk.CTkFrame(self.data_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Type", "Item Name", "Tag ID", "Qty", "Assignee", "Date & Time", "Status"]
+        
+        # Dynamic Proportions to ensure important columns (Name, Assignee, Date) don't get squished
+        weights = [1, 3, 2, 1, 2, 3, 1]
+        min_sizes = [60, 160, 100, 50, 120, 160, 80]
+
+        # Enforce exact column alignment and boundaries
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="hist_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
+
         search_q = self.search_entry.get().strip()
         conn = get_connection()
         if not conn: return
+        
         try:
             cursor = conn.cursor(dictionary=True)
             query = """
@@ -518,6 +511,7 @@ class BorrowingView(ctk.CTkFrame):
             """
             group_by = " GROUP BY tr.type, t.name, t.tag_id, u.full_name, u.user_id, tr.status"
             order_by = " ORDER BY MAX(IF(tr.type='Retrieval', tr.return_date, tr.borrow_date)) DESC LIMIT 50"
+            
             if search_q:
                 query += " WHERE u.full_name LIKE %s OR t.tag_id LIKE %s OR t.name LIKE %s"
                 query += group_by + order_by
@@ -527,8 +521,9 @@ class BorrowingView(ctk.CTkFrame):
                 cursor.execute(query)
 
             results = cursor.fetchall()
+            
             if not results:
-                ctk.CTkLabel(self.data_scroll, text="No transactions found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(table_inner, text="No transactions found.", text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             for i, row in enumerate(results):
@@ -537,16 +532,33 @@ class BorrowingView(ctk.CTkFrame):
                     row['tag_id'] if row['tag_id'] else "Unassigned",
                     str(row['grouped_qty']), row['full_name'], row['b_date'], row['status']
                 ]
-                row_frame = self._make_row(self.data_scroll, display_data, self.weights, "#F9FAFB" if i % 2 == 0 else "white")
-                row_frame.configure(cursor="hand2")
-                row_frame.bind("<Button-1>", lambda e, r=row: self.open_transaction_modal(r))
+                
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (text, weight) in enumerate(zip(display_data, self.weights)):
-                    txt_color = "#D8000C" if col == 6 and text == "Active" else ("#2ECC71" if col == 6 else "#1A1A1A")
-                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11), text_color=txt_color)
-                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="w")
-                    lbl.configure(cursor="hand2")
+                for col, val in enumerate(display_data):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0, cursor="hand2")
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_color = "#D8000C" if col == 6 and val == "Active" else ("#2ECC71" if col == 6 else "#1A1A1A")
+                    font_w = "bold" if col == 6 else "normal"
+                    
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center", anchor="center", cursor="hand2")
+                    
+                    # SAFE AUTO-WRAP: Uses the strict minimum widths to ensure text NEVER squishes unreadably
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+                    
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                    # Binds whole cell & text to open the modal
+                    cell.bind("<Button-1>", lambda e, r=row: self.open_transaction_modal(r))
                     lbl.bind("<Button-1>", lambda e, r=row: self.open_transaction_modal(r))
+                    
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 

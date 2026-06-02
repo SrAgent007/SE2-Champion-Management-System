@@ -8,29 +8,28 @@ class InventoryView(ctk.CTkFrame):
 
         self.user_info = user_info or {}
 
-        # 1. Global UI Fix: Apply hierarchy (Static main wrapper)
+        # 1. Main Wrapper Expansion
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0) # Top Bar
-        self.grid_rowconfigure(1, weight=1) # Content Area
+        self.grid_rowconfigure(0, weight=0) 
+        self.grid_rowconfigure(1, weight=1) 
 
         self.tool_hash_table = {}
 
         self.build_top_tabs()
 
     def build_top_tabs(self):
-        # 2. Global UI Fix: Top Segmented Tabs
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
 
         ctk.CTkLabel(top_bar, text="Products / Inventory", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
-        # 3. Global UI Fix: Scrollable content area mapping
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
         self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         
-        # 4. Give the Right Table panel significantly more weight and a strong minimum width
-        self.tab_content.grid_columnconfigure(0, weight=1, minsize=380) # Left Form
-        self.tab_content.grid_columnconfigure(1, weight=3, minsize=750) # Right Table
+        # PROPORTIONAL SPLIT: Using 'uniform' forces the left form and right table 
+        # to strictly maintain a 1:3 ratio at all window sizes.
+        self.tab_content.grid_columnconfigure(0, weight=1, minsize=380, uniform="main_split")
+        self.tab_content.grid_columnconfigure(1, weight=3, minsize=750, uniform="main_split")
         self.tab_content.grid_rowconfigure(0, weight=1)
 
         self.switch_tab()
@@ -46,7 +45,7 @@ class InventoryView(ctk.CTkFrame):
         self.name_entry.focus_set()
 
     def build_left_form(self, parent):
-        form_card = ctk.CTkScrollableFrame(parent, fg_color="white", corner_radius=10, width=380)
+        form_card = ctk.CTkScrollableFrame(parent, fg_color="white", corner_radius=10)
         form_card.grid(row=0, column=0, sticky="nsew", padx=(10, 5))
 
         ctk.CTkLabel(form_card, text="Add New Item", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(20, 10))
@@ -178,15 +177,16 @@ class InventoryView(ctk.CTkFrame):
 
         headers = ["PID", "Type", "Name", "Category", "Supplier", "Qty Avail.", "UoM", "Location", "Status"]
         
-        # PERFECTED ALIGNMENT: 
-        # Stronger emphasis on wider minimum widths to guarantee NO unreadable squishing.
-        # Removed the "uniform" tag to allow the grid to breathe naturally.
-        weights = [1, 1, 3, 2, 2, 1, 1, 3, 1]
-        min_sizes = [50, 80, 160, 100, 100, 70, 50, 130, 80]
+        # DYNAMIC PROPORTIONS: Weights determine the exact ratio relative to each other.
+        # Adding 'uniform' guarantees these specific proportions lock in place during resizing.
+        weights = [1, 2, 4, 3, 3, 2, 1, 4, 2]
+        min_sizes = [50, 80, 150, 100, 100, 80, 50, 150, 80]
 
         for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
-            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w)
+            # uniform="inv_cols" strictly ties the columns together mathematically
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="inv_cols")
 
+        # Header Row
         for col, text in enumerate(headers):
             cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
             cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
@@ -284,10 +284,10 @@ class InventoryView(ctk.CTkFrame):
 
                     lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center", cursor="hand2")
                     
-                    # SAFE AUTO-WRAP: Uses the strict minimum widths to ensure text NEVER squishes unreadably
-                    def set_wrap(e, l=lbl, m=min_sizes[col]):
-                        target_wrap = max(m - 10, e.width - 10)
-                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                    # DYNAMIC WRAP: Calculates live wrap boundaries as the window expands/shrinks
+                    def set_wrap(e, l=lbl, min_w=min_sizes[col]):
+                        target_wrap = max(min_w - 15, e.width - 15)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 10:
                             l.configure(wraplength=target_wrap)
                             l._last_wrap = target_wrap
                     cell.bind("<Configure>", set_wrap)

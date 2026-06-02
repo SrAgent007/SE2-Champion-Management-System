@@ -95,7 +95,7 @@ class RoleManagementView(ctk.CTkFrame):
             strength_frame.pack(anchor="w", padx=20, pady=(0, 8))
             GRAY = "#AAAAAA"; GREEN = "#2ECC71"
             crit_8     = ctk.CTkLabel(strength_frame, text="✗  At least 8 characters",     font=("Inter", 10), text_color=GRAY)
-            crit_num   = ctk.CTkLabel(strength_frame, text="✗  Contains a number",           font=("Inter", 10), text_color=GRAY)
+            crit_num   = ctk.CTkLabel(strength_frame, text="✗  Contains a number",         font=("Inter", 10), text_color=GRAY)
             crit_upper = ctk.CTkLabel(strength_frame, text="✗  Contains an uppercase letter", font=("Inter", 10), text_color=GRAY)
             crit_spec  = ctk.CTkLabel(strength_frame, text="✗  Contains a special character", font=("Inter", 10), text_color=GRAY)
             for lbl in (crit_8, crit_num, crit_upper, crit_spec):
@@ -108,7 +108,7 @@ class RoleManagementView(ctk.CTkFrame):
                 has_upper = any(c.isupper() for c in pwd)
                 has_spec  = any(c in r"!@#$%^&*()_+-=[]{}|;':\",./<>?" for c in pwd)
                 crit_8.configure(    text=f"{'✓' if has_8     else '✗'}  At least 8 characters",      text_color=GREEN if has_8     else GRAY)
-                crit_num.configure(  text=f"{'✓' if has_num   else '✗'}  Contains a number",            text_color=GREEN if has_num   else GRAY)
+                crit_num.configure(  text=f"{'✓' if has_num   else '✗'}  Contains a number",          text_color=GREEN if has_num   else GRAY)
                 crit_upper.configure(text=f"{'✓' if has_upper else '✗'}  Contains an uppercase letter", text_color=GREEN if has_upper else GRAY)
                 crit_spec.configure( text=f"{'✓' if has_spec  else '✗'}  Contains a special character", text_color=GREEN if has_spec  else GRAY)
 
@@ -138,14 +138,13 @@ class RoleManagementView(ctk.CTkFrame):
         self._build_reg_bottom(role)
 
     def execute_register(self):
-        # Removed emp_id = self.reg_emp_id.get().strip()
         name = self.reg_name.get().strip()
         email = self.reg_email.get().strip()
         role = self.reg_role.get()
-        pwd = self.reg_pass.get().strip()
-        cpwd = self.reg_confirm.get().strip()
+        pwd = self.reg_pass.get().strip() if self.reg_pass else ""
+        cpwd = self.reg_confirm.get().strip() if self.reg_confirm else ""
 
-        # 1. Validation without Employee ID
+        # 1. Validation
         if role == "Worker":
             if not name:
                 return messagebox.showerror("Validation Error", "Full Name is required for Workers.", parent=self.winfo_toplevel())
@@ -189,7 +188,6 @@ class RoleManagementView(ctk.CTkFrame):
             new_emp_id = f"{prefix}-{current_year}-{new_seq:03d}"
             
             # --- 3. SAVE TO DATABASE ---
-            import bcrypt
             hashed_pw = bcrypt.hashpw(pwd.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
             cursor.execute("INSERT INTO user (employee_id, full_name, email, role, password_hash) VALUES (%s, %s, %s, %s, %s)",
@@ -205,8 +203,8 @@ class RoleManagementView(ctk.CTkFrame):
             # Reset UI
             self.reg_name.delete(0, 'end')
             self.reg_email.delete(0, 'end')
-            self.reg_pass.delete(0, 'end')
-            self.reg_confirm.delete(0, 'end')
+            if self.reg_pass: self.reg_pass.delete(0, 'end')
+            if self.reg_confirm: self.reg_confirm.delete(0, 'end')
             
             self.load_user_table()
             
@@ -249,18 +247,6 @@ class RoleManagementView(ctk.CTkFrame):
                       command=lambda: [self.user_search.delete(0, "end"),
                                        self.load_user_table()]).pack(side="right")
 
-        headers = ["Employee ID", "Full Name", "Email", "Role", "Actions"]
-        weights = [2,             3,            3,       1,      3]
-
-        hdr = ctk.CTkFrame(table_card, fg_color="#1E4528",
-                           corner_radius=5, height=38)
-        hdr.pack(fill="x", padx=(20, 36))
-        hdr.pack_propagate(False)
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=8, sticky="ew")
-
         self.user_scroll = ctk.CTkScrollableFrame(
             table_card, fg_color="transparent")
         self.user_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
@@ -270,6 +256,24 @@ class RoleManagementView(ctk.CTkFrame):
     def load_user_table(self):
         for w in self.user_scroll.winfo_children():
             w.destroy()
+
+        # Hard-Bounded Uniform Grid setup
+        table_inner = ctk.CTkFrame(self.user_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Employee ID", "Full Name", "Email", "Role", "Actions"]
+        weights = [1, 2, 2, 1, 2]
+        min_sizes = [110, 160, 160, 80, 240] # Strict 240px min size specifically to fit all 3 buttons!
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="role_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         q = self.user_search.get().strip() if hasattr(self, "user_search") else ""
         conn = get_connection()
@@ -290,44 +294,55 @@ class RoleManagementView(ctk.CTkFrame):
             cursor.execute(sql, params)
             rows = cursor.fetchall()
 
-            weights = [2, 3, 3, 1, 3]
-
             if not rows:
-                ctk.CTkLabel(self.user_scroll, text="No users found.",
-                             text_color="gray").pack(pady=20)
+                ctk.CTkLabel(table_inner, text="No users found.",
+                             text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             for i, row in enumerate(rows):
-                rf = ctk.CTkFrame(self.user_scroll,
-                                  fg_color="#F9FAFB" if i % 2 == 0 else "white",
-                                  height=44)
-                rf.pack(fill="x", pady=2)
-                rf.pack_propagate(False)
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                vals = [row["employee_id"], row["full_name"],
-                        row["email"], row["role"]]
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    rf.grid_columnconfigure(col, weight=w)
-                    if col == 3 and val == "Admin":
-                        color = "#2ECC71"
-                    elif col == 3 and val == "Worker":
-                        color = "#D35400"
-                    else:
-                        color = "#1A1A1A"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                 text_color=color).grid(row=0, column=col, padx=10, pady=8, sticky="w")
+                vals = [row["employee_id"], row["full_name"], row["email"], row["role"]]
+                
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
 
-                rf.grid_columnconfigure(4, weight=weights[4])
-                action_frame = ctk.CTkFrame(rf, fg_color="transparent")
-                action_frame.grid(row=0, column=4, padx=8, pady=4, sticky="w")
+                    color = "#1A1A1A"
+                    if col == 3:
+                        if val == "Admin": color = "#2ECC71"
+                        elif val == "Worker": color = "#D35400"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11), text_color=color, justify="center", anchor="center")
+                    
+                    # Safe text wrapping to prevent grid explosion
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                # Action Cell (Contains all 3 Buttons)
+                btn_cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                btn_cell.grid(row=r_idx, column=4, sticky="nsew")
+                
+                action_frame = ctk.CTkFrame(btn_cell, fg_color="transparent")
+                action_frame.pack(expand=True, pady=6)
+                
                 ctk.CTkButton(action_frame, text="Edit", width=56, height=28,
                               fg_color="#F1C40F", text_color="black",
                               hover_color="#D4AC0D", font=("Inter", 10, "bold"),
                               command=lambda r=row: self.open_edit_modal(r)).pack(side="left", padx=(0, 4))
+                              
                 ctk.CTkButton(action_frame, text="🔖 Badge", width=80, height=28,
                               fg_color="#3498DB", text_color="white",
                               hover_color="#2980B9", font=("Inter", 10, "bold"),
                               command=lambda r=row: self.print_user_badge(r)).pack(side="left", padx=(0, 4))
+                              
                 ctk.CTkButton(action_frame, text="Delete", width=56, height=28,
                               fg_color="#FFEAEA", text_color="#D8000C",
                               hover_color="#FFC0C0", font=("Inter", 10, "bold"),

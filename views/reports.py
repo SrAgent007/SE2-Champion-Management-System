@@ -44,33 +44,6 @@ class ReportsView(ctk.CTkFrame):
 
         self.render_abc_tab()
 
-    def _get_column_min_sizes(self, weights, base_width=900):
-        total = sum(weights) or 1
-        return [max(80, int((w / total) * base_width)) for w in weights]
-
-    def _make_header(self, parent, headers, weights, pad_left=30, pad_right=36):
-        hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
-                           corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=(pad_left, pad_right))
-        hdr.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
-        return hdr
-
-    def _make_row(self, parent, vals, weights, bg):
-        rf = ctk.CTkFrame(parent, fg_color=bg, height=40)
-        rf.pack(fill="x", pady=2)
-        rf.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (val, w) in enumerate(zip(vals, weights)):
-            rf.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
-        return rf
-
     def switch_tab(self, selected):
         for widget in self.tab_content.winfo_children():
             widget.destroy()
@@ -83,7 +56,7 @@ class ReportsView(ctk.CTkFrame):
             self.render_activity_tab()
 
     # ==========================================
-    # TAB 1: ABC Analysis (preserves original logic)
+    # TAB 1: ABC Analysis 
     # ==========================================
     def render_abc_tab(self):
         frame = ctk.CTkFrame(
@@ -106,12 +79,6 @@ class ReportsView(ctk.CTkFrame):
                      text="Algorithm dynamically categorizes tools based on the Pareto Principle (80/20 usage).",
                      font=("Inter", 12), text_color="gray").pack(anchor="w", padx=30, pady=(0, 20))
 
-        headers = ["Rank", "Tool ID", "Tool Name",
-                   "Times Borrowed", "Cumulative %", "ABC Category"]
-        weights = [1, 1, 3, 2, 2, 2]
-
-        self._make_header(frame, headers, weights, pad_left=30, pad_right=46)
-
         self._abc_scroll = ctk.CTkScrollableFrame(
             frame, fg_color="transparent")
         self._abc_scroll.pack(fill="both", expand=True, padx=30, pady=(10, 30))
@@ -123,6 +90,23 @@ class ReportsView(ctk.CTkFrame):
         scroll = self._abc_scroll
         for w in scroll.winfo_children():
             w.destroy()
+
+        # Hard-Bounded Uniform Grid Setup
+        table_inner = ctk.CTkFrame(scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Rank", "Tool ID", "Tool Name", "Times Borrowed", "Cumulative %", "ABC Category"]
+        weights = [1, 2, 5, 2, 2, 3]
+        min_sizes = [50, 80, 200, 120, 120, 140]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="abc_cols")
+
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         conn = get_connection()
         if not conn:
@@ -170,15 +154,26 @@ class ReportsView(ctk.CTkFrame):
                 display_data = [f"#{i+1}", str(tool['tool_id']), tool['name'],
                                 str(tool['usage_count']), f"{cum_pct:.1f}%", category]
 
-                rf = self._make_row(scroll, display_data, [1, 1, 3, 2, 2, 2], "#F9FAFB" if i % 2 == 0 else "white")
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (text, w) in enumerate(zip(display_data, [1, 1, 3, 2, 2, 2])):
-                    txt_col = color if col == 5 else "black"
-                    ctk.CTkLabel(rf, text=text,
-                                 font=("Inter", 11, "bold" if col ==
-                                       5 else "normal"),
-                                 text_color=txt_col).grid(
-                        row=0, column=col, padx=10, pady=5, sticky="w")
+                for col, val in enumerate(display_data):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_col = color if col == 5 else "#1A1A1A"
+                    font_w = "bold" if col == 5 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
 
         except Exception as e:
             ctk.CTkLabel(
@@ -212,14 +207,25 @@ class ReportsView(ctk.CTkFrame):
                      text="Summary of all tool transactions, availability, and condition status.",
                      font=("Inter", 12), text_color="gray").pack(anchor="w", padx=30, pady=(0, 15))
 
-        headers = ["Tool ID", "Tool Name", "Tag ID", "Total Borrowed",
-                   "Currently Out", "Qty Available", "Condition"]
-        weights = [1, 2, 2, 2, 2, 2, 2]
-
-        self._make_header(frame, headers, weights, pad_left=30, pad_right=36)
-
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=30, pady=(10, 30))
+
+        # Hard-Bounded Uniform Grid Setup
+        table_inner = ctk.CTkFrame(scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Tool ID", "Tool Name", "Tag ID", "Total Borrowed", "Currently Out", "Qty Avail", "Condition"]
+        weights = [2, 5, 2, 2, 2, 2, 2]
+        min_sizes = [80, 200, 100, 120, 120, 100, 100]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="usage_cols")
+
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         self._usage_data = []
 
@@ -256,15 +262,29 @@ class ReportsView(ctk.CTkFrame):
                 ]
                 self._usage_data.append(vals)
 
-                rf = self._make_row(scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_col = "#1A1A1A"
                     if col == 6:
-                        color = "#2ECC71" if val == "Good" else "#D8000C"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                 text_color=color).grid(
-                        row=0, column=col, padx=10, pady=5, sticky="w")
+                        txt_col = "#2ECC71" if val == "Good" else "#D8000C"
+                        
+                    font_w = "bold" if col == 6 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
 
         except Exception as e:
             ctk.CTkLabel(
@@ -298,22 +318,25 @@ class ReportsView(ctk.CTkFrame):
                      text="Aggregated borrowing activity per employee for accountability monitoring.",
                      font=("Inter", 12), text_color="gray").pack(anchor="w", padx=30, pady=(0, 15))
 
-        headers = ["Employee ID", "Full Name", "Role",
-                   "Total Borrows", "Currently Active", "Total Returned"]
-        weights = [2, 3, 2, 2, 2, 2]
-
-        hdr = ctk.CTkFrame(frame, fg_color="#1E4528",
-                           corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=30)
-        hdr.pack_propagate(False)
-
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 12, "bold"),
-                         text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
-
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=30, pady=(10, 30))
+
+        # Hard-Bounded Uniform Grid Setup
+        table_inner = ctk.CTkFrame(scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Employee ID", "Full Name", "Role", "Total Borrows", "Currently Active", "Total Returned"]
+        weights = [2, 4, 2, 2, 2, 2]
+        min_sizes = [100, 180, 100, 120, 120, 120]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="activity_cols")
+
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         self._activity_data = []
 
@@ -345,15 +368,29 @@ class ReportsView(ctk.CTkFrame):
                 ]
                 self._activity_data.append(vals)
 
-                rf = self._make_row(scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_col = "#1A1A1A"
                     if col == 4 and int(val) > 0:
-                        color = "#D8000C"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                 text_color=color).grid(
-                        row=0, column=col, padx=10, pady=5, sticky="w")
+                        txt_col = "#D8000C"
+                        
+                    font_w = "bold" if col == 4 and int(val) > 0 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
 
         except Exception as e:
             ctk.CTkLabel(

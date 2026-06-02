@@ -26,33 +26,6 @@ class TrackingView(ctk.CTkFrame):
                        "Opened Tracking module")
 
     # ==========================================
-    # GLOBAL TABLE FIX: GRID-LOCK ALGORITHM
-    # ==========================================
-    def _make_header(self, parent, headers, weights):
-        hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
-                           corner_radius=5, height=38)
-        # 36px right pad accounts for the scrollbar
-        hdr.pack(fill="x", padx=(20, 36))
-        hdr.pack_propagate(False)
-        total = sum(weights)
-        for col, (h, w) in enumerate(zip(headers, weights)):
-            min_w = int((w / total) * 900)  # Strict minsize anchoring
-            hdr.grid_columnconfigure(col, weight=w, minsize=min_w)
-            ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
-                         text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=8, sticky="ew")
-        return hdr
-
-    def _make_row(self, parent, vals, weights, bg):
-        rf = ctk.CTkFrame(parent, fg_color=bg, height=36)
-        rf.pack(fill="x", pady=1)
-        rf.pack_propagate(False)
-        total = sum(weights)
-        for col, (val, w) in enumerate(zip(vals, weights)):
-            min_w = int((w / total) * 900)  # Identical minsize anchoring
-            rf.grid_columnconfigure(col, weight=w, minsize=min_w)
-        return rf
-
-    # ==========================================
     # MODAL FIX (Deployment Details)
     # ==========================================
     def view_deployment_details(self, row):
@@ -167,23 +140,32 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="An endless, chronological history book. Records exactly what happened and when (e.g., 'John took a hammer on Tuesday').",
                      font=("Inter", 11, "italic"), text_color="gray").pack(anchor="w", padx=20, pady=(0, 8))
 
-        headers = ["TRN", "Type", "Tool Name", "Tag ID",
-                   "Borrower", "Borrow Date", "Return Date", "Status"]
-        weights = [1,     1,      3,            2,
-                   2,           3,             3,             1]
-        self._log_weights = weights
-        self._make_header(frame, headers, weights)
-
         self._log_scroll = ctk.CTkScrollableFrame(
             frame, fg_color="transparent")
         self._log_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_logs()
 
     def load_logs(self):
-        scroll = self._log_scroll
-        weights = self._log_weights
-        for w in scroll.winfo_children():
+        for w in self._log_scroll.winfo_children():
             w.destroy()
+
+        # Hard-Bounded Uniform Grid setup
+        table_inner = ctk.CTkFrame(self._log_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["TRN", "Type", "Tool Name", "Tag ID", "Borrower", "Borrow Date", "Return Date", "Status"]
+        weights = [1, 1, 3, 2, 2, 3, 3, 1]
+        min_sizes = [50, 70, 160, 100, 120, 150, 150, 80]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="log_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         q = self.log_search.get().strip() if hasattr(self, "log_search") else ""
         conn = get_connection()
@@ -214,36 +196,49 @@ class TrackingView(ctk.CTkFrame):
             rows = cursor.fetchall()
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No transaction records found.",
-                             text_color="gray").pack(pady=20)
+                ctk.CTkLabel(table_inner, text="No transaction records found.",
+                             text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             for i, row in enumerate(rows):
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
+
                 vals = [
                     str(row["transaction_id"]), row["type"], row["tool_name"],
                     row["tag_id"], row["full_name"],
-                    row["borrow_date"], row["return_date"], row["status"],
+                    row["borrow_date"], row["return_date"], row["status"]
                 ]
-                bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(scroll, vals, weights, bg)
+                
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0, cursor="hand2")
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
 
-                def on_click(e, r=row):
-                    self.view_deployment_details(r)
-
-                rf.bind("<Button-1>", on_click)
-                rf.configure(cursor="hand2")
-
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                    txt_color = "#1A1A1A"
                     if col == 7:
-                        color = "#D8000C" if val == "Active" else "#2ECC71"
-                    lbl = ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                       text_color=color, cursor="hand2")
-                    lbl.grid(row=0, column=col, padx=8, pady=6, sticky="w")
-                    lbl.bind("<Button-1>", on_click)
+                        txt_color = "#D8000C" if val == "Active" else "#2ECC71"
+                        
+                    font_w = "bold" if col == 7 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center", anchor="center", cursor="hand2")
+                    
+                    # SAFE AUTO-WRAP
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                    # Binds whole cell & text to open the modal
+                    cell.bind("<Button-1>", lambda e, r=row: self.view_deployment_details(r))
+                    lbl.bind("<Button-1>", lambda e, r=row: self.view_deployment_details(r))
+
         except Exception as e:
             ctk.CTkLabel(
-                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+                self._log_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -296,13 +291,6 @@ class TrackingView(ctk.CTkFrame):
                                           text_color="#1E4528")
         self.audit_summary.pack(anchor="w", padx=20, pady=(0, 5))
 
-        headers = ["TRN", "Borrower", "Tool", "Tag ID", "Borrowed On",
-                   "Return Date", "Cond@Borrow", "Cond@Return", "Status"]
-        weights = [1,     2,          3,      2,       3,
-                   3,           2,            2,           1]
-        self._audit_weights = weights
-        self._make_header(frame, headers, weights)
-
         self._audit_scroll = ctk.CTkScrollableFrame(
             frame, fg_color="transparent")
         self._audit_scroll.pack(
@@ -310,10 +298,25 @@ class TrackingView(ctk.CTkFrame):
         self.load_audit()
 
     def load_audit(self):
-        scroll = self._audit_scroll
-        weights = self._audit_weights
-        for w in scroll.winfo_children():
+        for w in self._audit_scroll.winfo_children():
             w.destroy()
+
+        table_inner = ctk.CTkFrame(self._audit_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["TRN", "Borrower", "Tool", "Tag ID", "Borrowed On", "Return Date", "Cond@Borrow", "Cond@Return", "Status"]
+        weights = [1, 2, 3, 2, 3, 3, 2, 2, 1]
+        min_sizes = [50, 120, 150, 100, 150, 150, 90, 90, 80]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="audit_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         status_filter = self.audit_filter.get() if hasattr(
             self, "audit_filter") else "All"
@@ -360,28 +363,43 @@ class TrackingView(ctk.CTkFrame):
 
             if not rows:
                 ctk.CTkLabel(
-                    scroll, text="No records match the audit criteria.", text_color="gray").pack(pady=20)
+                    table_inner, text="No records match the audit criteria.", text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             for i, row in enumerate(rows):
+                r_idx = i + 1
+                bg = "#FFF8F0" if row["status"] == "Active" else ("#F9FAFB" if i % 2 == 0 else "white")
+                
                 vals = [
-                    str(row["transaction_id"]
-                        ), row["full_name"], row["tool_name"],
+                    str(row["transaction_id"]), row["full_name"], row["tool_name"],
                     row["tag_id"], row["borrow_date"], row["return_date"],
                     row["cond_borrow"], row["cond_return"], row["status"],
                 ]
-                bg = "#FFF8F0" if row["status"] == "Active" else (
-                    "#F9FAFB" if i % 2 == 0 else "white")
-                rf = self._make_row(scroll, vals, weights, bg)
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_color = "#1A1A1A"
                     if col == 8:
-                        color = "#D8000C" if val == "Active" else "#2ECC71"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                 text_color=color).grid(row=0, column=col, padx=8, pady=6, sticky="w")
+                        txt_color = "#D8000C" if val == "Active" else "#2ECC71"
+                        
+                    font_w = "bold" if col == 8 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center", anchor="center")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
         except Exception as e:
             ctk.CTkLabel(
-                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+                self._audit_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -443,23 +461,30 @@ class TrackingView(ctk.CTkFrame):
             "Inter", 11, "bold"), text_color="#1E4528")
         self.act_summary.pack(anchor="w", padx=20, pady=(0, 5))
 
-        headers = ["Log ID", "Timestamp", "Employee",
-                   "Action Type", "Module", "Details"]
-        weights = [1,        3,           3,
-                   2,             2,        4]
-        self._act_weights = weights
-        self._make_header(frame, headers, weights)
-
         self._act_scroll = ctk.CTkScrollableFrame(
             frame, fg_color="transparent")
         self._act_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_activity()
 
     def load_activity(self):
-        scroll = self._act_scroll
-        weights = self._act_weights
-        for w in scroll.winfo_children():
+        for w in self._act_scroll.winfo_children():
             w.destroy()
+
+        table_inner = ctk.CTkFrame(self._act_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["Log ID", "Timestamp", "Employee", "Action Type", "Module", "Details"]
+        weights = [1, 3, 3, 2, 2, 5]
+        min_sizes = [60, 150, 150, 100, 120, 250]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="act_cols")
+
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         module_filter = self.act_module_filter.get() if hasattr(
             self, "act_module_filter") else "All"
@@ -495,12 +520,12 @@ class TrackingView(ctk.CTkFrame):
                 text=f"  Showing {len(rows)} entries (max 500 per query)")
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No activity records found.",
-                             text_color="gray").pack(pady=20)
+                ctk.CTkLabel(table_inner, text="No activity records found.",
+                             text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             action_colors = {
-                "Login":    "#2ECC71", "Logout":   "#E74C3C", "Added":    "#3498DB",
+                "Login":    "#2ECC71", "Logout":   "#E74C3C", "Added":     "#3498DB",
                 "Edited":   "#F39C12", "Archived": "#95A5A6", "Searched": "#9B59B6",
                 "Viewed":   "#1A1A1A", "Issued":   "#27AE60", "Retrieved": "#16A085",
                 "Submitted": "#2980B9", "Approved": "#27AE60", "Flagged":  "#D8000C",
@@ -508,22 +533,38 @@ class TrackingView(ctk.CTkFrame):
             }
 
             for i, row in enumerate(rows):
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
+
                 vals = [
                     str(row["log_id"]), row["ts"], row["employee"],
-                    row["action_type"], row["module"], row["details"],
+                    row["action_type"], row["module"], row["details"]
                 ]
-                bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(scroll, vals, weights, bg)
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_color = "#1A1A1A"
                     if col == 3:
-                        color = action_colors.get(val, "#555555")
-                    font_style = "bold" if col == 3 else "normal"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 10, font_style), text_color=color).grid(
-                        row=0, column=col, padx=8, pady=5, sticky="w")
+                        txt_color = action_colors.get(val, "#555555")
+                        
+                    font_w = "bold" if col == 3 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center", anchor="center")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
         except Exception as e:
             ctk.CTkLabel(
-                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+                self._act_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -564,14 +605,25 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="Click on any transaction record below to view its Deployment Receipt.", font=(
             "Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
 
-        headers = ["TRN", "Tool Name", "Tag ID", "Borrow Date",
-                   "Return Date", "Cond@Return", "Status"]
-        weights = [1,     3,           2,        3,
-                   3,             2,             1]
-        self._make_header(frame, headers, weights)
-
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+
+        table_inner = ctk.CTkFrame(scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["TRN", "Tool Name", "Tag ID", "Borrow Date", "Return Date", "Cond@Return", "Status"]
+        weights = [1, 3, 2, 3, 3, 2, 1]
+        min_sizes = [50, 160, 100, 150, 150, 100, 80]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="staff_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         user_id = self.user_info.get("user_id")
         if not user_id:
@@ -594,8 +646,8 @@ class TrackingView(ctk.CTkFrame):
                             conn2.close()
 
         if not user_id:
-            ctk.CTkLabel(scroll, text="Could not resolve user session. Please log out and log back in.",
-                         text_color="red").pack(pady=20)
+            ctk.CTkLabel(table_inner, text="Could not resolve user session. Please log out and log back in.",
+                         text_color="red").grid(row=1, column=0, columnspan=len(headers), pady=20)
             return
 
         conn = get_connection()
@@ -619,33 +671,44 @@ class TrackingView(ctk.CTkFrame):
 
             if not rows:
                 ctk.CTkLabel(
-                    scroll, text="You have no borrowing history.", text_color="gray").pack(pady=20)
+                    table_inner, text="You have no borrowing history.", text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
                 return
 
             for i, row in enumerate(rows):
-                vals = [
-                    str(row["transaction_id"]
-                        ), row["tool_name"], row["tag_id"],
-                    row["borrow_date"], row["return_date"],
-                    row["cond_return"], row["status"],
-                ]
+                r_idx = i + 1
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(scroll, vals, weights, bg)
 
-                def on_click(e, r=row):
-                    self.view_deployment_details(r)
+                vals = [
+                    str(row["transaction_id"]), row["tool_name"], row["tag_id"],
+                    row["borrow_date"], row["return_date"],
+                    row["cond_return"], row["status"]
+                ]
+                
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0, cursor="hand2")
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
 
-                rf.bind("<Button-1>", on_click)
-                rf.configure(cursor="hand2")
-
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    color = "#1A1A1A"
+                    txt_color = "#1A1A1A"
                     if col == 6:
-                        color = "#D8000C" if val == "Active" else "#2ECC71"
-                    lbl = ctk.CTkLabel(rf, text=val, font=(
-                        "Inter", 11), text_color=color, cursor="hand2")
-                    lbl.grid(row=0, column=col, padx=8, pady=6, sticky="w")
-                    lbl.bind("<Button-1>", on_click)
+                        txt_color = "#D8000C" if val == "Active" else "#2ECC71"
+                        
+                    font_w = "bold" if col == 6 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center", anchor="center", cursor="hand2")
+                    
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                    # Binds whole cell & text to open the modal
+                    cell.bind("<Button-1>", lambda e, r=row: self.view_deployment_details(r))
+                    lbl.bind("<Button-1>", lambda e, r=row: self.view_deployment_details(r))
+
         except Exception as e:
             ctk.CTkLabel(
                 scroll, text=f"Error: {e}", text_color="red").pack(pady=10)

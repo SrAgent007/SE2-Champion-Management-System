@@ -45,42 +45,33 @@ class TaggingView(ctk.CTkFrame):
         self.scan_test_btn.pack(side="right", padx=10)
 
         self.headers = ["PID", "Name", "Category", "Supplier", "Qty", "Location", "Status", "Tag ID"]
-        self.weights = [1, 2, 2, 2, 1, 2, 1, 2]
-
-        self._make_header(main_frame, self.headers, self.weights, pad_left=20, pad_right=36)
-
+        
         self.data_scroll = ctk.CTkScrollableFrame(main_frame, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(10, 20))
-
-    def _get_column_min_sizes(self, weights, base_width=900):
-        total = sum(weights) or 1
-        return [max(80, int((w / total) * base_width)) for w in weights]
-
-
-    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
-        header = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
-        header.pack(fill="x", padx=(pad_left, pad_right))
-        header.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (text, weight) in enumerate(zip(headers, weights)):
-            header.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
-        return header
-
-    def _make_row(self, parent, values, weights, bg):
-        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=40)
-        row_frame.pack(fill="x", pady=2)
-        row_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (value, weight) in enumerate(zip(values, weights)):
-            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-        return row_frame
 
     def load_tagging_data(self, query="", filter_type="All Tools"):
         for widget in self.data_scroll.winfo_children():
             widget.destroy()
+
+        # Hard-Bounded Uniform Grid setup
+        table_inner = ctk.CTkFrame(self.data_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        # PERFECTED ALIGNMENT: 
+        # Strong emphasis on wider minimum widths for Name, Location, and Tag ID
+        weights = [1, 3, 2, 2, 1, 3, 2, 3]
+        min_sizes = [50, 160, 100, 100, 50, 130, 80, 140]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            # 'uniform' guarantees proportional locking while resizing
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w, uniform="tag_cols")
+
+        # Header Row
+        for col, text in enumerate(self.headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
 
         conn = get_connection()
         if not conn: return
@@ -111,24 +102,38 @@ class TaggingView(ctk.CTkFrame):
             results = cursor.fetchall()
 
             if not results:
-                ctk.CTkLabel(self.data_scroll, text="No tools found matching the criteria.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(table_inner, text="No tools found matching the criteria.", text_color="gray").grid(row=1, column=0, columnspan=len(self.headers), pady=20)
                 return
 
             for i, row_data in enumerate(results):
-                display_data = [str(item) for item in row_data[:8]] 
-                
                 tool_id, name, cat, sup, qty, loc, cond, tag, desc, price = row_data
+                display_data = [str(tool_id), str(name), str(cat), str(sup), str(qty), str(loc), str(cond), str(tag)]
                 full_data = [tool_id, name, desc, price, qty, loc, cond, tag, cat, sup]
                 
-                row_frame = self._make_row(self.data_scroll, display_data, self.weights, "#F9FAFB" if i % 2 == 0 else "white")
-                row_frame.bind("<Button-1>", lambda e, data=full_data: self.open_tag_manager(data))
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (text, weight) in enumerate(zip(display_data, self.weights)):
-                    txt_color = "#D8000C" if col == 7 and text == "Unassigned" else "#1A1A1A"
-                    font_weight = "bold" if col == 7 and text != "Unassigned" else "normal"
+                for col, val in enumerate(display_data):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0, cursor="hand2")
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_col = "#D8000C" if col == 7 and val == "Unassigned" else "#1A1A1A"
+                    font_w = "bold" if col == 7 and val != "Unassigned" else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center", cursor="hand2")
                     
-                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11, font_weight), text_color=txt_color, anchor="center")
-                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="ew")
+                    # SAFE AUTO-WRAP: Uses the strict minimum widths to ensure text NEVER squishes unreadably
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                    # Binds whole cell & text to open the modal
+                    cell.bind("<Button-1>", lambda e, data=full_data: self.open_tag_manager(data))
                     lbl.bind("<Button-1>", lambda e, data=full_data: self.open_tag_manager(data))
 
         except Exception as e:
