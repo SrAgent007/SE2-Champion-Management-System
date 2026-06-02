@@ -3,6 +3,7 @@ from tkinter import messagebox
 from database import get_connection, log_action
 from datetime import datetime
 
+
 class MaintenanceView(ctk.CTkFrame):
     def __init__(self, parent, user_info=None):
         super().__init__(parent, fg_color="transparent")
@@ -14,15 +15,18 @@ class MaintenanceView(ctk.CTkFrame):
 
         uid = self.user_info.get("user_id")
         if uid:
-            log_action(uid, "Viewed", "Maintenance", "Opened Maintenance module")
+            log_action(uid, "Viewed", "Maintenance",
+                       "Opened Maintenance module")
 
     def _make_header(self, parent, headers, weights):
-        hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=38)
+        hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
+                           corner_radius=5, height=38)
         hdr.pack(fill="x", padx=(20, 36))
         hdr.pack_propagate(False)
         total = sum(weights)
         for col, (h, w) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
+            hdr.grid_columnconfigure(
+                col, weight=w, minsize=max(50, int(w / total * 900)))
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
                          text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=8, sticky="ew")
         return hdr
@@ -33,7 +37,8 @@ class MaintenanceView(ctk.CTkFrame):
         rf.pack_propagate(False)
         total = sum(weights)
         for col, (val, w) in enumerate(zip(vals, weights)):
-            rf.grid_columnconfigure(col, weight=w, minsize=max(50, int(w / total * 900)))
+            rf.grid_columnconfigure(
+                col, weight=w, minsize=max(50, int(w / total * 900)))
         return rf
 
     def _ensure_user_archive_columns(self):
@@ -98,7 +103,8 @@ class MaintenanceView(ctk.CTkFrame):
         self.seg_btn.pack(side="right")
 
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
-        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
+        self.tab_content.grid(
+            row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
 
@@ -120,7 +126,8 @@ class MaintenanceView(ctk.CTkFrame):
     # TAB 1: Manage Issues (With Auto-Sync Fix)
     # ------------------------------------------
     def render_issues_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(2, weight=1)
@@ -153,17 +160,22 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(form_grid, text="Issue / Condition Type", font=("Inter", 11, "bold"),
                      text_color="#1A1A1A").grid(row=0, column=2, sticky="w", padx=5)
 
-        self.flag_tool_id = ctk.CTkEntry(form_grid, placeholder_text="e.g., TAG-003 or PID 42")
-        self.flag_tool_id.grid(row=1, column=0, sticky="ew", padx=5, pady=(3, 8))
-        self.flag_reported_by = ctk.CTkEntry(form_grid, placeholder_text="e.g., EMP-001")
-        self.flag_reported_by.grid(row=1, column=1, sticky="ew", padx=5, pady=(3, 8))
+        self.flag_tool_id = ctk.CTkEntry(
+            form_grid, placeholder_text="e.g., TAG-003 or PID 42")
+        self.flag_tool_id.grid(
+            row=1, column=0, sticky="ew", padx=5, pady=(3, 8))
+        self.flag_reported_by = ctk.CTkEntry(
+            form_grid, placeholder_text="e.g., EMP-001")
+        self.flag_reported_by.grid(
+            row=1, column=1, sticky="ew", padx=5, pady=(3, 8))
         self.flag_condition = ctk.CTkOptionMenu(
             form_grid,
             values=["Damaged", "Lost", "Needs Repair", "Discrepancy",
                     "Missing Parts", "Stolen", "Other"],
             fg_color="#F9FAFB", text_color="black"
         )
-        self.flag_condition.grid(row=1, column=2, sticky="ew", padx=5, pady=(3, 8))
+        self.flag_condition.grid(
+            row=1, column=2, sticky="ew", padx=5, pady=(3, 8))
 
         notes_row = ctk.CTkFrame(flag_card, fg_color="transparent")
         notes_row.pack(fill="x", padx=15, pady=(0, 12))
@@ -172,7 +184,8 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(notes_row, text="Issue Description / Notes",
                      font=("Inter", 11, "bold"), text_color="#1A1A1A").grid(
             row=0, column=0, sticky="w", pady=(0, 3))
-        self.flag_notes = ctk.CTkEntry(notes_row, placeholder_text="Describe the issue in detail...")
+        self.flag_notes = ctk.CTkEntry(
+            notes_row, placeholder_text="Describe the issue in detail...")
         self.flag_notes.grid(row=1, column=0, sticky="ew", padx=(0, 10))
 
         ctk.CTkButton(notes_row, text="Submit Flag", width=130,
@@ -183,7 +196,8 @@ class MaintenanceView(ctk.CTkFrame):
         filter_row = ctk.CTkFrame(frame, fg_color="transparent")
         filter_row.pack(fill="x", padx=20, pady=(0, 5))
 
-        ctk.CTkLabel(filter_row, text="Show:", font=("Inter", 12), text_color="gray").pack(side="left")
+        ctk.CTkLabel(filter_row, text="Show:", font=(
+            "Inter", 12), text_color="gray").pack(side="left")
         self.issues_filter = ctk.CTkOptionMenu(
             filter_row, values=["All Issues", "Open (Pending)", "Resolved"],
             width=150, fg_color="#F9FAFB", text_color="black"
@@ -217,8 +231,10 @@ class MaintenanceView(ctk.CTkFrame):
         self._issues_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._issues_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
-        self._issues_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+        self._issues_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
+        self._issues_scroll.pack(
+            fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_issues()
 
     def submit_flag(self):
@@ -238,9 +254,11 @@ class MaintenanceView(ctk.CTkFrame):
         try:
             cursor = conn.cursor(dictionary=True)
             if tool_input.isdigit():
-                cursor.execute("SELECT tool_id, name FROM tool WHERE tool_id = %s", (tool_input,))
+                cursor.execute(
+                    "SELECT tool_id, name FROM tool WHERE tool_id = %s", (tool_input,))
             else:
-                cursor.execute("SELECT tool_id, name FROM tool WHERE tag_id = %s", (tool_input,))
+                cursor.execute(
+                    "SELECT tool_id, name FROM tool WHERE tag_id = %s", (tool_input,))
             tool = cursor.fetchone()
             if not tool:
                 messagebox.showerror("Not Found", "No tool found with that PID or Tag ID.",
@@ -283,7 +301,8 @@ class MaintenanceView(ctk.CTkFrame):
             self.flag_notes.delete(0, "end")
             self.load_issues()
         except Exception as e:
-            messagebox.showerror("Database Error", str(e), parent=self.winfo_toplevel())
+            messagebox.showerror("Database Error", str(e),
+                                 parent=self.winfo_toplevel())
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -295,7 +314,8 @@ class MaintenanceView(ctk.CTkFrame):
         for w in scroll.winfo_children():
             w.destroy()
 
-        status_filter = self.issues_filter.get() if hasattr(self, "issues_filter") else "All Issues"
+        status_filter = self.issues_filter.get() if hasattr(
+            self, "issues_filter") else "All Issues"
         q = self.issues_search.get().strip() if hasattr(self, "issues_search") else ""
 
         conn = get_connection()
@@ -318,7 +338,7 @@ class MaintenanceView(ctk.CTkFrame):
             conn.commit()
 
             # --- THE AUTO-SYNC FIX ---
-            # Automatically generates a repair ticket for any tool marked Damaged/Needs Repair 
+            # Automatically generates a repair ticket for any tool marked Damaged/Needs Repair
             # if it doesn't already have an open ticket. This perfectly syncs the Graph and this table!
             cursor.execute("""
                 INSERT INTO tool_issues (tool_id, reported_by, condition_flag, notes, is_resolved)
@@ -336,7 +356,7 @@ class MaintenanceView(ctk.CTkFrame):
                 SELECT ti.issue_id, t.name as tool_name, ti.reported_by,
                        ti.condition_flag, IFNULL(ti.notes,'—') as notes,
                        DATE_FORMAT(DATE_ADD(ti.flagged_at, INTERVAL 8 HOUR),
-                           '%b %d, %Y %I:%M %p') as flagged_at,
+                           '%b %d, %Y %I:%i %p') as flagged_at,
                        ti.is_resolved
                 FROM tool_issues ti
                 JOIN tool t ON ti.tool_id = t.tool_id
@@ -363,7 +383,8 @@ class MaintenanceView(ctk.CTkFrame):
                 )
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No issues found. Inventory is clean.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(
+                    scroll, text="No issues found. Inventory is clean.", text_color="gray").pack(pady=20)
                 return
 
             condition_colors = {
@@ -382,9 +403,11 @@ class MaintenanceView(ctk.CTkFrame):
                     str(row["issue_id"]), row["tool_name"], row["reported_by"],
                     row["condition_flag"], row["notes"], row["flagged_at"], resolved_text,
                 ]
-                bg = "#F0FFF0" if row["is_resolved"] else ("#FFF8F0" if i % 2 == 0 else "#FFF3F3")
+                bg = "#F0FFF0" if row["is_resolved"] else (
+                    "#FFF8F0" if i % 2 == 0 else "#FFF3F3")
                 rf = self._make_row(scroll, vals, weights, bg)
-                rf.bind("<Button-1>", lambda e, r=row: self.open_issue_modal(r))
+                rf.bind("<Button-1>", lambda e,
+                        r=row: self.open_issue_modal(r))
                 rf.configure(cursor="hand2")
                 for col, (val, w) in enumerate(zip(vals, weights)):
                     color = "#1A1A1A"
@@ -396,9 +419,11 @@ class MaintenanceView(ctk.CTkFrame):
                     lbl = ctk.CTkLabel(rf, text=val,
                                        font=("Inter", 11, font_style), text_color=color, cursor="hand2")
                     lbl.grid(row=0, column=col, padx=8, pady=6, sticky="w")
-                    lbl.bind("<Button-1>", lambda e, r=row: self.open_issue_modal(r))
+                    lbl.bind("<Button-1>", lambda e,
+                             r=row: self.open_issue_modal(r))
         except Exception as e:
-            ctk.CTkLabel(scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(
+                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -443,12 +468,14 @@ class MaintenanceView(ctk.CTkFrame):
 
         ctk.CTkLabel(form, text="Resolution Notes:", font=("Inter", 11, "bold"),
                      text_color="#1A1A1A").pack(anchor="w")
-        notes_entry = ctk.CTkEntry(form, placeholder_text="e.g., Sent to repair, replaced, etc.")
+        notes_entry = ctk.CTkEntry(
+            form, placeholder_text="e.g., Sent to repair, replaced, etc.")
         notes_entry.pack(fill="x", pady=(5, 10))
 
         def resolve_issue():
             conn = get_connection()
-            if not conn: return
+            if not conn:
+                return
             try:
                 cursor = conn.cursor()
                 resolution = notes_entry.get().strip() or "Marked resolved by Admin."
@@ -458,7 +485,7 @@ class MaintenanceView(ctk.CTkFrame):
                         notes = CONCAT(IFNULL(notes,''), ' | Resolution: ', %s)
                     WHERE issue_id = %s
                 """, (cond_menu.get(), resolution, row["issue_id"]))
-                
+
                 cursor.execute("""
                     UPDATE tool SET `condition` = %s
                     WHERE tool_id = (SELECT tool_id FROM tool_issues WHERE issue_id = %s)
@@ -471,7 +498,8 @@ class MaintenanceView(ctk.CTkFrame):
                                f"Resolved issue #{row['issue_id']} for '{row['tool_name']}'. "
                                f"New condition: {cond_menu.get()}")
 
-                messagebox.showinfo("Resolved", "Issue marked as resolved and inventory updated.", parent=modal)
+                messagebox.showinfo(
+                    "Resolved", "Issue marked as resolved and inventory updated.", parent=modal)
                 modal.destroy()
                 self.load_issues()
             except Exception as e:
@@ -494,7 +522,8 @@ class MaintenanceView(ctk.CTkFrame):
     # TAB 2: Archived Tools
     # ------------------------------------------
     def render_tools_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
@@ -504,19 +533,24 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Archived & Decommissioned Tools",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["Tool ID", "Name", "Category", "Qty", "Archived At", "Action"]
+        headers = ["Tool ID", "Name", "Category",
+                   "Qty", "Archived At", "Action"]
         weights = [1, 3, 2, 1, 2, 1]
         self._tools_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._tools_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
-        self._tools_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+        self._tools_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
+        self._tools_scroll.pack(
+            fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_archived_tools()
 
     def load_archived_tools(self):
-        for w in self._tools_scroll.winfo_children(): w.destroy()
+        for w in self._tools_scroll.winfo_children():
+            w.destroy()
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor(dictionary=True)
             # Fetch exact timestamps and include quantity_total from inventory
@@ -530,44 +564,56 @@ class MaintenanceView(ctk.CTkFrame):
                 ORDER BY t.archived_at DESC
             """)
             rows = cursor.fetchall()
-            
+
             if not rows:
-                ctk.CTkLabel(self._tools_scroll, text="No archived tools found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(
+                    self._tools_scroll, text="No archived tools found.", text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(rows):
-                archived_ts = row["archived_date"].strftime("%Y-%m-%d %H:%M") if row["archived_date"] else "—"
-                vals = [str(row["tool_id"]), row["name"], row["category"], f"{row['qty_total']:g}", archived_ts, "Restore"]
+                archived_ts = row["archived_date"].strftime(
+                    "%Y-%m-%d %H:%M") if row["archived_date"] else "—"
+                vals = [str(row["tool_id"]), row["name"], row["category"],
+                        f"{row['qty_total']:g}", archived_ts, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(self._tools_scroll, vals, self._tools_weights, bg)
-                
+                rf = self._make_row(self._tools_scroll, vals,
+                                    self._tools_weights, bg)
+
                 for col, (val, w) in enumerate(zip(vals, self._tools_weights)):
                     if col == 5:
-                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
+                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D",
                                             command=lambda r=row["tool_id"]: self.restore_tool(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
                     else:
-                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(row=0, column=col, padx=8, pady=6, sticky="w")
+                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(
+                            row=0, column=col, padx=8, pady=6, sticky="w")
         except Exception as e:
-            ctk.CTkLabel(self._tools_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(self._tools_scroll,
+                         text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
 
     def restore_tool(self, tool_id):
-        if not messagebox.askyesno("Confirm Restore", f"Are you sure you want to restore Tool PID: {tool_id}?"): return
+        if not messagebox.askyesno("Confirm Restore", f"Are you sure you want to restore Tool PID: {tool_id}?"):
+            return
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor()
-            cursor.execute("UPDATE tool SET is_archived = 0 WHERE tool_id = %s", (tool_id,))
+            cursor.execute(
+                "UPDATE tool SET is_archived = 0 WHERE tool_id = %s", (tool_id,))
             conn.commit()
-            
+
             uid = self.user_info.get("user_id")
-            if uid: log_action(uid, "Edited", "Maintenance", f"Restored Tool PID: {tool_id} from Archive")
-            
-            messagebox.showinfo("Success", "Tool restored to active inventory.")
+            if uid:
+                log_action(uid, "Edited", "Maintenance",
+                           f"Restored Tool PID: {tool_id} from Archive")
+
+            messagebox.showinfo(
+                "Success", "Tool restored to active inventory.")
             self.load_archived_tools()
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -580,7 +626,8 @@ class MaintenanceView(ctk.CTkFrame):
     # TAB 3: Archived Employees
     # ------------------------------------------
     def render_employees_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
@@ -590,19 +637,23 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Inactive / Archived Employees",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["User ID", "Employee ID", "Full Name", "Role", "Status", "Archived At", "Action"]
+        headers = ["User ID", "Employee ID", "Full Name",
+                   "Role", "Status", "Archived At", "Action"]
         weights = [1, 2, 3, 2, 2, 2, 1]
         self._emp_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._emp_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self._emp_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
         self._emp_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_archived_employees()
 
     def load_archived_employees(self):
-        for w in self._emp_scroll.winfo_children(): w.destroy()
+        for w in self._emp_scroll.winfo_children():
+            w.destroy()
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
@@ -612,37 +663,46 @@ class MaintenanceView(ctk.CTkFrame):
                 ORDER BY archived_at DESC, user_id DESC
             """)
             rows = cursor.fetchall()
-            
+
             if not rows:
-                ctk.CTkLabel(self._emp_scroll, text="No archived employees found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(
+                    self._emp_scroll, text="No archived employees found.", text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(rows):
-                status_display = row["status"] if row.get("status") else "Inactive"
+                status_display = row["status"] if row.get(
+                    "status") else "Inactive"
                 archived_at = row.get("archived_at")
-                archived_display = archived_at.strftime("%Y-%m-%d %H:%M:%S") if archived_at else "—"
-                vals = [str(row["user_id"]), row["employee_id"], row["full_name"], row["role"], status_display, archived_display, "Restore"]
+                archived_display = archived_at.strftime(
+                    "%Y-%m-%d %H:%M:%S") if archived_at else "—"
+                vals = [str(row["user_id"]), row["employee_id"], row["full_name"],
+                        row["role"], status_display, archived_display, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(self._emp_scroll, vals, self._emp_weights, bg)
-                
+                rf = self._make_row(self._emp_scroll, vals,
+                                    self._emp_weights, bg)
+
                 for col, (val, w) in enumerate(zip(vals, self._emp_weights)):
                     if col == 6:
-                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
+                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D",
                                             command=lambda r=row["user_id"]: self.restore_employee(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
                     else:
-                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(row=0, column=col, padx=8, pady=6, sticky="w")
+                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(
+                            row=0, column=col, padx=8, pady=6, sticky="w")
         except Exception as e:
-            ctk.CTkLabel(self._emp_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(self._emp_scroll,
+                         text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
 
     def restore_employee(self, user_id):
-        if not messagebox.askyesno("Confirm Restore", f"Restore employee access for User ID: {user_id}?"): return
+        if not messagebox.askyesno("Confirm Restore", f"Restore employee access for User ID: {user_id}?"):
+            return
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor()
             cursor.execute(
@@ -650,10 +710,12 @@ class MaintenanceView(ctk.CTkFrame):
                 (user_id,)
             )
             conn.commit()
-            
+
             uid = self.user_info.get("user_id")
-            if uid: log_action(uid, "Edited", "Maintenance", f"Restored Employee UID: {user_id} from Archive")
-            
+            if uid:
+                log_action(uid, "Edited", "Maintenance",
+                           f"Restored Employee UID: {user_id} from Archive")
+
             messagebox.showinfo("Success", "Employee access restored.")
             self.load_archived_employees()
         except Exception as e:
@@ -667,7 +729,8 @@ class MaintenanceView(ctk.CTkFrame):
     # TAB 4: Archived Projects
     # ------------------------------------------
     def render_projects_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
@@ -677,19 +740,23 @@ class MaintenanceView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Completed / Archived Projects",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        headers = ["Project ID", "Project Name", "Client/Dept", "Status", "End/Archived At", "Action"]
+        headers = ["Project ID", "Project Name", "Client/Dept",
+                   "Status", "End/Archived At", "Action"]
         weights = [1, 3, 2, 1, 2, 1]
         self._proj_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._proj_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self._proj_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
         self._proj_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_archived_projects()
 
     def load_archived_projects(self):
-        for w in self._proj_scroll.winfo_children(): w.destroy()
+        for w in self._proj_scroll.winfo_children():
+            w.destroy()
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor(dictionary=True)
             # Only show projects that have been explicitly archived (archived_at IS NOT NULL)
@@ -699,55 +766,67 @@ class MaintenanceView(ctk.CTkFrame):
                 WHERE archived_at IS NOT NULL
                 ORDER BY archived_at DESC
             """)
-                    
+
             rows = cursor.fetchall()
-            
+
             if not rows:
-                ctk.CTkLabel(self._proj_scroll, text="No archived projects found. Archive a Completed or Cancelled project from Project Management.", text_color="gray", wraplength=600, justify="center").pack(pady=30)
+                ctk.CTkLabel(self._proj_scroll, text="No archived projects found. Archive a Completed or Cancelled project from Project Management.",
+                             text_color="gray", wraplength=600, justify="center").pack(pady=30)
                 return
 
             for i, row in enumerate(rows):
                 display_date = None
                 if row.get("archived_at"):
-                    display_date = row["archived_at"].strftime("%Y-%m-%d %H:%M:%S")
+                    display_date = row["archived_at"].strftime(
+                        "%Y-%m-%d %H:%M:%S")
                 elif row.get("end_date"):
                     display_date = row["end_date"].strftime("%Y-%m-%d")
                 else:
                     display_date = "—"
 
                 client_display = row.get("client") or "—"
-                vals = [str(row["project_id"]), row["name"], client_display, row["status"], display_date, "Restore"]
+                vals = [str(row["project_id"]), row["name"],
+                        client_display, row["status"], display_date, "Restore"]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
-                rf = self._make_row(self._proj_scroll, vals, self._proj_weights, bg)
-                
+                rf = self._make_row(self._proj_scroll, vals,
+                                    self._proj_weights, bg)
+
                 for col, (val, w) in enumerate(zip(vals, self._proj_weights)):
                     if col == 5:
-                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D", 
+                        btn = ctk.CTkButton(rf, text="Restore", width=60, fg_color="#2980B9", hover_color="#1F618D",
                                             command=lambda r=row["project_id"]: self.restore_project(r))
                         btn.grid(row=0, column=col, padx=8, pady=4, sticky="w")
                     else:
-                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(row=0, column=col, padx=8, pady=6, sticky="w")
+                        ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color="#1A1A1A").grid(
+                            row=0, column=col, padx=8, pady=6, sticky="w")
         except Exception as e:
-            ctk.CTkLabel(self._proj_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(self._proj_scroll,
+                         text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
 
     def restore_project(self, project_id):
-        if not messagebox.askyesno("Confirm Restore", f"Restore Project ID: {project_id} to Active status?"): return
+        if not messagebox.askyesno("Confirm Restore", f"Restore Project ID: {project_id} to Active status?"):
+            return
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor()
             # Clear the archived_at timestamp to restore to active
-            cursor.execute("UPDATE projects SET status = 'Approved', archived_at = NULL WHERE project_id = %s", (project_id,))
+            cursor.execute(
+                "UPDATE projects SET status = 'Approved', archived_at = NULL WHERE project_id = %s", (project_id,))
             conn.commit()
-            
+
             uid = self.user_info.get("user_id")
-            if uid: log_action(uid, "Edited", "Maintenance", f"Restored Project ID: {project_id} from Archive")
-            
-            messagebox.showinfo("Success", "Project marked as Approved and restored from archive.")
+            if uid:
+                log_action(uid, "Edited", "Maintenance",
+                           f"Restored Project ID: {project_id} from Archive")
+
+            messagebox.showinfo(
+                "Success", "Project marked as Approved and restored from archive.")
             self.load_archived_projects()
         except Exception as e:
             messagebox.showerror("Error", str(e))

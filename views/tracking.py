@@ -22,18 +22,21 @@ class TrackingView(ctk.CTkFrame):
 
         uid = self.user_info.get("user_id")
         if uid:
-            log_action(uid, "Viewed", "Tracking & Accountability", "Opened Tracking module")
+            log_action(uid, "Viewed", "Tracking & Accountability",
+                       "Opened Tracking module")
 
     # ==========================================
     # GLOBAL TABLE FIX: GRID-LOCK ALGORITHM
     # ==========================================
     def _make_header(self, parent, headers, weights):
-        hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=38)
-        hdr.pack(fill="x", padx=(20, 36)) # 36px right pad accounts for the scrollbar
+        hdr = ctk.CTkFrame(parent, fg_color="#1E4528",
+                           corner_radius=5, height=38)
+        # 36px right pad accounts for the scrollbar
+        hdr.pack(fill="x", padx=(20, 36))
         hdr.pack_propagate(False)
         total = sum(weights)
         for col, (h, w) in enumerate(zip(headers, weights)):
-            min_w = int((w / total) * 900) # Strict minsize anchoring
+            min_w = int((w / total) * 900)  # Strict minsize anchoring
             hdr.grid_columnconfigure(col, weight=w, minsize=min_w)
             ctk.CTkLabel(hdr, text=h, font=("Inter", 11, "bold"),
                          text_color="white", anchor="center").grid(row=0, column=col, padx=8, pady=8, sticky="ew")
@@ -45,7 +48,7 @@ class TrackingView(ctk.CTkFrame):
         rf.pack_propagate(False)
         total = sum(weights)
         for col, (val, w) in enumerate(zip(vals, weights)):
-            min_w = int((w / total) * 900) # Identical minsize anchoring
+            min_w = int((w / total) * 900)  # Identical minsize anchoring
             rf.grid_columnconfigure(col, weight=w, minsize=min_w)
         return rf
 
@@ -56,7 +59,7 @@ class TrackingView(ctk.CTkFrame):
         modal = ctk.CTkToplevel(self)
         trans_id = row.get("transaction_id", "N/A")
         modal.title(f"Deployment History - Receipt #{trans_id}")
-        
+
         modal.geometry("500x600")
         modal.minsize(500, 500)
         modal.attributes("-topmost", True)
@@ -65,11 +68,14 @@ class TrackingView(ctk.CTkFrame):
         bottom_frame = ctk.CTkFrame(modal, fg_color="transparent")
         bottom_frame.pack(fill="x", side="bottom", padx=20, pady=20)
 
-        scroll_container = ctk.CTkScrollableFrame(modal, fg_color="transparent")
+        scroll_container = ctk.CTkScrollableFrame(
+            modal, fg_color="transparent")
         scroll_container.pack(fill="both", expand=True, padx=20, pady=(20, 0))
 
-        ctk.CTkLabel(scroll_container, text="Champion Fine Tooling", font=("Inter", 20, "bold"), text_color="#1E4528").pack(pady=(0,2))
-        ctk.CTkLabel(scroll_container, text="Official Issuance Receipt", font=("Inter", 14), text_color="gray").pack(pady=(0,20))
+        ctk.CTkLabel(scroll_container, text="Champion Fine Tooling", font=(
+            "Inter", 20, "bold"), text_color="#1E4528").pack(pady=(0, 2))
+        ctk.CTkLabel(scroll_container, text="Official Issuance Receipt", font=(
+            "Inter", 14), text_color="gray").pack(pady=(0, 20))
 
         issued_to = row.get("full_name", self.user_info.get("username", "N/A"))
         trans_type = row.get("type", "Issuance")
@@ -81,20 +87,24 @@ class TrackingView(ctk.CTkFrame):
             f"Date In: {row.get('return_date', 'N/A')}\n"
             f"Issued To: {issued_to}\n"
         )
-        ctk.CTkLabel(scroll_container, text=details, justify="left", font=("Inter", 13)).pack(anchor="w", pady=(0,20))
+        ctk.CTkLabel(scroll_container, text=details, justify="left",
+                     font=("Inter", 13)).pack(anchor="w", pady=(0, 20))
 
-        ctk.CTkLabel(scroll_container, text="Items Deployed:", font=("Inter", 13, "bold")).pack(anchor="w", pady=(0,5))
-        
+        ctk.CTkLabel(scroll_container, text="Items Deployed:", font=(
+            "Inter", 13, "bold")).pack(anchor="w", pady=(0, 5))
+
         tool_name = row.get("tool_name", "N/A")
         tag_id = row.get("tag_id", "N/A")
         status = row.get("status", "N/A")
-        ctk.CTkLabel(scroll_container, text=f"• {tool_name} (Tag: {tag_id}) - {status}", font=("Inter", 12)).pack(anchor="w", padx=10, pady=2)
+        ctk.CTkLabel(scroll_container, text=f"• {tool_name} (Tag: {tag_id}) - {status}", font=(
+            "Inter", 12)).pack(anchor="w", padx=10, pady=2)
 
     def build_admin_view(self):
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
 
-        ctk.CTkLabel(top_bar, text="Tracking & Accountability", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
+        ctk.CTkLabel(top_bar, text="Tracking & Accountability", font=(
+            "Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
         tabs = ["📋 Borrow/Return Logs", "🔎 Audit Records", "⚙️ Activity Log"]
         self.tab_var = ctk.StringVar(value=tabs[0])
@@ -106,7 +116,8 @@ class TrackingView(ctk.CTkFrame):
         self.seg_btn.pack(side="right")
 
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
-        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
+        self.tab_content.grid(
+            row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
 
@@ -130,7 +141,8 @@ class TrackingView(ctk.CTkFrame):
     # TAB 1: Borrow/Return Logs
     # ------------------------------------------
     def render_logs_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
@@ -140,10 +152,11 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(top, text="Borrow / Return Transaction Logs",
                      font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
 
-        self.log_search = ctk.CTkEntry(top, placeholder_text="Search employee or tool...", width=220)
+        self.log_search = ctk.CTkEntry(
+            top, placeholder_text="Search employee or tool...", width=220)
         self.log_search.pack(side="right", padx=(5, 0))
         self.log_search.bind("<Return>", lambda e: self.load_logs())
-        
+
         ctk.CTkButton(top, text="Search", width=70, fg_color="#1E4528",
                       hover_color="#14301C", font=("Inter", 11, "bold"),
                       command=self.load_logs).pack(side="right", padx=5)
@@ -154,12 +167,15 @@ class TrackingView(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="An endless, chronological history book. Records exactly what happened and when (e.g., 'John took a hammer on Tuesday').",
                      font=("Inter", 11, "italic"), text_color="gray").pack(anchor="w", padx=20, pady=(0, 8))
 
-        headers = ["TRN", "Type", "Tool Name", "Tag ID", "Borrower", "Borrow Date", "Return Date", "Status"]
-        weights = [1,     1,      3,            2,       2,           3,             3,             1]
+        headers = ["TRN", "Type", "Tool Name", "Tag ID",
+                   "Borrower", "Borrow Date", "Return Date", "Status"]
+        weights = [1,     1,      3,            2,
+                   2,           3,             3,             1]
         self._log_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._log_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self._log_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
         self._log_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_logs()
 
@@ -180,10 +196,10 @@ class TrackingView(ctk.CTkFrame):
                        IFNULL(t.tag_id,'Unassigned') as tag_id,
                        u.full_name,
                        DATE_FORMAT(DATE_ADD(tr.borrow_date, INTERVAL 8 HOUR),
-                           '%b %d, %Y %I:%M %p') as borrow_date,
+                           '%b %d, %Y %I:%i %p') as borrow_date,
                        IF(tr.return_date IS NOT NULL,
                            DATE_FORMAT(DATE_ADD(tr.return_date, INTERVAL 8 HOUR),
-                               '%b %d, %Y %I:%M %p'), '—') as return_date,
+                               '%b %d, %Y %I:%i %p'), '—') as return_date,
                        tr.status
                 FROM transaction tr
                 JOIN tool t ON tr.tool_id = t.tool_id
@@ -198,7 +214,8 @@ class TrackingView(ctk.CTkFrame):
             rows = cursor.fetchall()
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No transaction records found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(scroll, text="No transaction records found.",
+                             text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(rows):
@@ -209,10 +226,10 @@ class TrackingView(ctk.CTkFrame):
                 ]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(scroll, vals, weights, bg)
-                
+
                 def on_click(e, r=row):
                     self.view_deployment_details(r)
-                    
+
                 rf.bind("<Button-1>", on_click)
                 rf.configure(cursor="hand2")
 
@@ -221,11 +238,12 @@ class TrackingView(ctk.CTkFrame):
                     if col == 7:
                         color = "#D8000C" if val == "Active" else "#2ECC71"
                     lbl = ctk.CTkLabel(rf, text=val, font=("Inter", 11),
-                                 text_color=color, cursor="hand2")
+                                       text_color=color, cursor="hand2")
                     lbl.grid(row=0, column=col, padx=8, pady=6, sticky="w")
                     lbl.bind("<Button-1>", on_click)
         except Exception as e:
-            ctk.CTkLabel(scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(
+                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -235,7 +253,8 @@ class TrackingView(ctk.CTkFrame):
     # TAB 2: Audit Records
     # ------------------------------------------
     def render_audit_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(2, weight=1)
@@ -284,8 +303,10 @@ class TrackingView(ctk.CTkFrame):
         self._audit_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._audit_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
-        self._audit_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+        self._audit_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
+        self._audit_scroll.pack(
+            fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_audit()
 
     def load_audit(self):
@@ -294,7 +315,8 @@ class TrackingView(ctk.CTkFrame):
         for w in scroll.winfo_children():
             w.destroy()
 
-        status_filter = self.audit_filter.get() if hasattr(self, "audit_filter") else "All"
+        status_filter = self.audit_filter.get() if hasattr(
+            self, "audit_filter") else "All"
         q = self.audit_search.get().strip() if hasattr(self, "audit_search") else ""
 
         conn = get_connection()
@@ -306,10 +328,10 @@ class TrackingView(ctk.CTkFrame):
                 SELECT tr.transaction_id, u.full_name, t.name as tool_name,
                        IFNULL(t.tag_id,'Unassigned') as tag_id,
                        DATE_FORMAT(DATE_ADD(tr.borrow_date, INTERVAL 8 HOUR),
-                           '%b %d, %Y %I:%M %p') as borrow_date,
+                           '%b %d, %Y %I:%i %p') as borrow_date,
                        IF(tr.return_date IS NOT NULL,
                            DATE_FORMAT(DATE_ADD(tr.return_date, INTERVAL 8 HOUR),
-                               '%b %d, %Y %I:%M %p'), '—') as return_date,
+                               '%b %d, %Y %I:%i %p'), '—') as return_date,
                        IFNULL(tr.condition_at_borrow,'N/A') as cond_borrow,
                        IFNULL(tr.condition_at_return,'N/A')  as cond_return,
                        tr.status
@@ -337,16 +359,19 @@ class TrackingView(ctk.CTkFrame):
             )
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No records match the audit criteria.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(
+                    scroll, text="No records match the audit criteria.", text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(rows):
                 vals = [
-                    str(row["transaction_id"]), row["full_name"], row["tool_name"],
+                    str(row["transaction_id"]
+                        ), row["full_name"], row["tool_name"],
                     row["tag_id"], row["borrow_date"], row["return_date"],
                     row["cond_borrow"], row["cond_return"], row["status"],
                 ]
-                bg = "#FFF8F0" if row["status"] == "Active" else ("#F9FAFB" if i % 2 == 0 else "white")
+                bg = "#FFF8F0" if row["status"] == "Active" else (
+                    "#F9FAFB" if i % 2 == 0 else "white")
                 rf = self._make_row(scroll, vals, weights, bg)
                 for col, (val, w) in enumerate(zip(vals, weights)):
                     color = "#1A1A1A"
@@ -355,7 +380,8 @@ class TrackingView(ctk.CTkFrame):
                     ctk.CTkLabel(rf, text=val, font=("Inter", 11),
                                  text_color=color).grid(row=0, column=col, padx=8, pady=6, sticky="w")
         except Exception as e:
-            ctk.CTkLabel(scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(
+                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -365,7 +391,8 @@ class TrackingView(ctk.CTkFrame):
     # TAB 3: Activity Log
     # ------------------------------------------
     def render_activity_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(2, weight=1)
@@ -384,7 +411,8 @@ class TrackingView(ctk.CTkFrame):
         filter_row = ctk.CTkFrame(frame, fg_color="transparent")
         filter_row.pack(fill="x", padx=20, pady=(0, 8))
 
-        ctk.CTkLabel(filter_row, text="Module:", font=("Inter", 12), text_color="gray").pack(side="left")
+        ctk.CTkLabel(filter_row, text="Module:", font=(
+            "Inter", 12), text_color="gray").pack(side="left")
         self.act_module_filter = ctk.CTkOptionMenu(
             filter_row,
             values=["All", "Authentication", "Dashboard", "Inventory", "Projects",
@@ -411,15 +439,19 @@ class TrackingView(ctk.CTkFrame):
                           self.load_activity()
                       ]).pack(side="left")
 
-        self.act_summary = ctk.CTkLabel(frame, text="", font=("Inter", 11, "bold"), text_color="#1E4528")
+        self.act_summary = ctk.CTkLabel(frame, text="", font=(
+            "Inter", 11, "bold"), text_color="#1E4528")
         self.act_summary.pack(anchor="w", padx=20, pady=(0, 5))
 
-        headers = ["Log ID", "Timestamp", "Employee", "Action Type", "Module", "Details"]
-        weights = [1,        3,           3,          2,             2,        4]
+        headers = ["Log ID", "Timestamp", "Employee",
+                   "Action Type", "Module", "Details"]
+        weights = [1,        3,           3,
+                   2,             2,        4]
         self._act_weights = weights
         self._make_header(frame, headers, weights)
 
-        self._act_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self._act_scroll = ctk.CTkScrollableFrame(
+            frame, fg_color="transparent")
         self._act_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.load_activity()
 
@@ -429,7 +461,8 @@ class TrackingView(ctk.CTkFrame):
         for w in scroll.winfo_children():
             w.destroy()
 
-        module_filter = self.act_module_filter.get() if hasattr(self, "act_module_filter") else "All"
+        module_filter = self.act_module_filter.get() if hasattr(
+            self, "act_module_filter") else "All"
         q = self.act_search.get().strip() if hasattr(self, "act_search") else ""
 
         conn = get_connection()
@@ -440,7 +473,7 @@ class TrackingView(ctk.CTkFrame):
             sql = """
                 SELECT sl.log_id,
                        DATE_FORMAT(DATE_ADD(sl.timestamp, INTERVAL 8 HOUR),
-                           '%b %d, %Y %I:%M %p') as ts,
+                           '%b %d, %Y %I:%i %p') as ts,
                        IFNULL(u.full_name, CONCAT('UID:', sl.user_id)) as employee,
                        sl.action_type, sl.module, IFNULL(sl.details,'—') as details
                 FROM system_logs sl
@@ -458,17 +491,19 @@ class TrackingView(ctk.CTkFrame):
             cursor.execute(sql, params)
             rows = cursor.fetchall()
 
-            self.act_summary.configure(text=f"  Showing {len(rows)} entries (max 500 per query)")
+            self.act_summary.configure(
+                text=f"  Showing {len(rows)} entries (max 500 per query)")
 
             if not rows:
-                ctk.CTkLabel(scroll, text="No activity records found.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(scroll, text="No activity records found.",
+                             text_color="gray").pack(pady=20)
                 return
 
             action_colors = {
                 "Login":    "#2ECC71", "Logout":   "#E74C3C", "Added":    "#3498DB",
                 "Edited":   "#F39C12", "Archived": "#95A5A6", "Searched": "#9B59B6",
-                "Viewed":   "#1A1A1A", "Issued":   "#27AE60", "Retrieved":"#16A085",
-                "Submitted":"#2980B9", "Approved": "#27AE60", "Flagged":  "#D8000C",
+                "Viewed":   "#1A1A1A", "Issued":   "#27AE60", "Retrieved": "#16A085",
+                "Submitted": "#2980B9", "Approved": "#27AE60", "Flagged":  "#D8000C",
                 "Resolved": "#2ECC71",
             }
 
@@ -481,12 +516,14 @@ class TrackingView(ctk.CTkFrame):
                 rf = self._make_row(scroll, vals, weights, bg)
                 for col, (val, w) in enumerate(zip(vals, weights)):
                     color = "#1A1A1A"
-                    if col == 3:  
+                    if col == 3:
                         color = action_colors.get(val, "#555555")
                     font_style = "bold" if col == 3 else "normal"
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 10, font_style), text_color=color).grid(row=0, column=col, padx=8, pady=5, sticky="w")
+                    ctk.CTkLabel(rf, text=val, font=("Inter", 10, font_style), text_color=color).grid(
+                        row=0, column=col, padx=8, pady=5, sticky="w")
         except Exception as e:
-            ctk.CTkLabel(scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(
+                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -496,7 +533,8 @@ class TrackingView(ctk.CTkFrame):
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 15))
 
-        ctk.CTkLabel(top_bar, text="Tracking & Accountability", font=("Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
+        ctk.CTkLabel(top_bar, text="Tracking & Accountability", font=(
+            "Inter", 16, "bold"), text_color="#1E4528").pack(side="left")
 
         tabs = ["👤 My History"]
         self.tab_var = ctk.StringVar(value=tabs[0])
@@ -508,22 +546,28 @@ class TrackingView(ctk.CTkFrame):
         self.seg_btn.pack(side="right")
 
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
-        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
+        self.tab_content.grid(
+            row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
-        
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
 
         top = ctk.CTkFrame(frame, fg_color="transparent")
         top.pack(fill="x", padx=20, pady=(20, 10))
-        ctk.CTkLabel(top, text="My Borrowing & Return History", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
-        ctk.CTkLabel(frame, text="Click on any transaction record below to view its Deployment Receipt.", font=("Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
+        ctk.CTkLabel(top, text="My Borrowing & Return History", font=(
+            "Inter", 16, "bold"), text_color="#1A1A1A").pack(side="left")
+        ctk.CTkLabel(frame, text="Click on any transaction record below to view its Deployment Receipt.", font=(
+            "Inter", 11), text_color="gray").pack(anchor="w", padx=20, pady=(0, 10))
 
-        headers = ["TRN", "Tool Name", "Tag ID", "Borrow Date", "Return Date", "Cond@Return", "Status"]
-        weights = [1,     3,           2,        3,             3,             2,             1]
+        headers = ["TRN", "Tool Name", "Tag ID", "Borrow Date",
+                   "Return Date", "Cond@Return", "Status"]
+        weights = [1,     3,           2,        3,
+                   3,             2,             1]
         self._make_header(frame, headers, weights)
 
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
@@ -537,26 +581,33 @@ class TrackingView(ctk.CTkFrame):
                 if conn2:
                     try:
                         c2 = conn2.cursor(dictionary=True)
-                        c2.execute("SELECT user_id FROM user WHERE employee_id = %s", (emp_id,))
+                        c2.execute(
+                            "SELECT user_id FROM user WHERE employee_id = %s", (emp_id,))
                         row2 = c2.fetchone()
-                        if row2: user_id = row2["user_id"]
-                    except Exception: pass
+                        if row2:
+                            user_id = row2["user_id"]
+                    except Exception:
+                        pass
                     finally:
-                        if conn2.is_connected(): c2.close(); conn2.close()
+                        if conn2.is_connected():
+                            c2.close()
+                            conn2.close()
 
         if not user_id:
-            ctk.CTkLabel(scroll, text="Could not resolve user session. Please log out and log back in.", text_color="red").pack(pady=20)
+            ctk.CTkLabel(scroll, text="Could not resolve user session. Please log out and log back in.",
+                         text_color="red").pack(pady=20)
             return
 
         conn = get_connection()
-        if not conn: return
+        if not conn:
+            return
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
                 SELECT tr.transaction_id, t.name as tool_name,
                        IFNULL(t.tag_id,'Unassigned') as tag_id,
-                       DATE_FORMAT(DATE_ADD(tr.borrow_date, INTERVAL 8 HOUR), '%b %d, %Y %I:%M %p') as borrow_date,
-                       IF(tr.return_date IS NOT NULL, DATE_FORMAT(DATE_ADD(tr.return_date, INTERVAL 8 HOUR), '%b %d, %Y %I:%M %p'), '—') as return_date,
+                       DATE_FORMAT(DATE_ADD(tr.borrow_date, INTERVAL 8 HOUR), '%b %d, %Y %I:%i %p') as borrow_date,
+                       IF(tr.return_date IS NOT NULL, DATE_FORMAT(DATE_ADD(tr.return_date, INTERVAL 8 HOUR), '%b %d, %Y %I:%i %p'), '—') as return_date,
                        IFNULL(tr.condition_at_return,'—') as cond_return,
                        tr.status
                 FROM transaction tr
@@ -567,21 +618,23 @@ class TrackingView(ctk.CTkFrame):
             rows = cursor.fetchall()
 
             if not rows:
-                ctk.CTkLabel(scroll, text="You have no borrowing history.", text_color="gray").pack(pady=20)
+                ctk.CTkLabel(
+                    scroll, text="You have no borrowing history.", text_color="gray").pack(pady=20)
                 return
 
             for i, row in enumerate(rows):
                 vals = [
-                    str(row["transaction_id"]), row["tool_name"], row["tag_id"],
+                    str(row["transaction_id"]
+                        ), row["tool_name"], row["tag_id"],
                     row["borrow_date"], row["return_date"],
                     row["cond_return"], row["status"],
                 ]
                 bg = "#F9FAFB" if i % 2 == 0 else "white"
                 rf = self._make_row(scroll, vals, weights, bg)
-                
+
                 def on_click(e, r=row):
                     self.view_deployment_details(r)
-                    
+
                 rf.bind("<Button-1>", on_click)
                 rf.configure(cursor="hand2")
 
@@ -589,10 +642,14 @@ class TrackingView(ctk.CTkFrame):
                     color = "#1A1A1A"
                     if col == 6:
                         color = "#D8000C" if val == "Active" else "#2ECC71"
-                    lbl = ctk.CTkLabel(rf, text=val, font=("Inter", 11), text_color=color, cursor="hand2")
+                    lbl = ctk.CTkLabel(rf, text=val, font=(
+                        "Inter", 11), text_color=color, cursor="hand2")
                     lbl.grid(row=0, column=col, padx=8, pady=6, sticky="w")
                     lbl.bind("<Button-1>", on_click)
         except Exception as e:
-            ctk.CTkLabel(scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+            ctk.CTkLabel(
+                scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
         finally:
-            if conn.is_connected(): cursor.close(); conn.close()
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
