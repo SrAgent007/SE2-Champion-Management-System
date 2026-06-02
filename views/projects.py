@@ -18,9 +18,7 @@ class ProjectsView(ctk.CTkFrame):
 
         self.req_cart = []
         
-        # Ensure the column exists before the table tries to query it
         self._ensure_archive_column()
-
         self.build_top_tabs()
 
         uid = self.user_info.get("user_id")
@@ -52,7 +50,8 @@ class ProjectsView(ctk.CTkFrame):
 
         self.inner = ctk.CTkFrame(self, fg_color="transparent")
         self.inner.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
-        self.inner.grid_columnconfigure(0, weight=1, minsize=380) 
+        
+        self.inner.grid_columnconfigure(0, weight=1, minsize=400) 
         self.inner.grid_columnconfigure(1, weight=2, minsize=600) 
         self.inner.grid_rowconfigure(0, weight=1)
 
@@ -62,7 +61,7 @@ class ProjectsView(ctk.CTkFrame):
         self.p_name.focus_set()
 
     def build_form_panel(self):
-        form_card = ctk.CTkScrollableFrame(self.inner, fg_color="white", corner_radius=10, width=380)
+        form_card = ctk.CTkScrollableFrame(self.inner, fg_color="white", corner_radius=10, width=400)
         form_card.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
         ctk.CTkLabel(form_card, text="Draft Project Plan", font=("Inter", 16, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(20, 10))
@@ -180,41 +179,16 @@ class ProjectsView(ctk.CTkFrame):
             self.workers_list.pop(idx)
             self._refresh_worker_tags()
 
-    def _get_column_min_sizes(self, weights, base_width=900):
-        total = sum(weights) or 1
-        return [max(80, int((w / total) * base_width)) for w in weights]
-
-    def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
-        hdr = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
-        hdr.pack(fill="x", padx=(pad_left, pad_right))
-        hdr.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (text, weight) in enumerate(zip(headers, weights)):
-            hdr.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(hdr, text=text, font=("Inter", 11, "bold"), text_color="white").grid(row=0, column=col, padx=10, pady=10, sticky="w")
-        return hdr
-
-    def _make_row(self, parent, values, weights, bg):
-        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=45)
-        row_frame.pack(fill="x", pady=2)
-        row_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (val, weight) in enumerate(zip(values, weights)):
-            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-        return row_frame
-
     def open_tool_picker(self):
         modal = ctk.CTkToplevel(self)
         modal.title("Inventory Requisition Catalog")
-        modal.geometry("720x560")
+        modal.geometry("900x600")
         modal.configure(fg_color="white")
         modal.attributes("-topmost", True)
         modal.grab_set()
         modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (720 // 2)
-        y = (modal.winfo_screenheight() // 2) - (560 // 2)
+        x = (modal.winfo_screenwidth() // 2) - (900 // 2)
+        y = (modal.winfo_screenheight() // 2) - (600 // 2)
         modal.geometry(f"+{x}+{y}")
 
         ctk.CTkLabel(modal, text="Select Items for Project Requisition", font=("Inter", 16, "bold"), text_color="black").pack(pady=(20, 5))
@@ -239,18 +213,30 @@ class ProjectsView(ctk.CTkFrame):
 
         search_name.bind("<Return>", lambda e: do_search())
         search_pid.bind("<Return>", lambda e: do_search())
-        
         search_name.focus_set()
 
-        cols = ["PID", "Type", "Item Name", "UoM", "Avail/Tot", "Req Qty", "Action"]
-        weights = [1, 1, 2, 1, 1, 1, 1]
-        self._make_header(modal, cols, weights, pad_left=20, pad_right=36)
-
+        # Reverted back to safe default vertical scrolling
         list_scroll = ctk.CTkScrollableFrame(modal, fg_color="transparent")
-        list_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 10))
+        list_scroll.pack(fill="both", expand=True, padx=20, pady=(10, 10))
 
         def load_catalog(name_q="", pid_q=""):
             for w in list_scroll.winfo_children(): w.destroy()
+            
+            cat_inner = ctk.CTkFrame(list_scroll, fg_color="transparent")
+            cat_inner.pack(fill="x", expand=True)
+
+            cols = ["PID", "Type", "Item Name", "UoM", "Avail/Tot", "Req Qty", "Action"]
+            weights = [1, 1, 3, 1, 1, 1, 1]
+
+            for col, w in enumerate(weights):
+                cat_inner.grid_columnconfigure(col, weight=w, uniform="c_cols")
+
+            # Render Headers
+            for col, text in enumerate(cols):
+                cell = ctk.CTkFrame(cat_inner, fg_color="#1E4528", corner_radius=0)
+                cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+                ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").pack(fill="both", expand=True, padx=5, pady=8)
+
             conn = get_connection()
             if not conn: return
             try:
@@ -275,36 +261,51 @@ class ProjectsView(ctk.CTkFrame):
                     params = [f"%{pid_q}%"]
 
                 cursor.execute(query, params)
+                results = cursor.fetchall()
 
-                for i, row in enumerate(cursor.fetchall()):
-                    rf = ctk.CTkFrame(list_scroll, fg_color="#F9FAFB" if i % 2 == 0 else "white", height=40)
-                    rf.pack(fill="x", pady=2)
-                    rf.pack_propagate(False)
-                    min_sizes = self._get_column_min_sizes(weights)
-                    for col, w in enumerate(weights):
-                        rf.grid_columnconfigure(col, weight=w, minsize=min_sizes[col])
+                if not results:
+                    ctk.CTkLabel(cat_inner, text="No items found. Try a different search.", text_color="gray").grid(row=1, column=0, columnspan=len(cols), pady=20)
+                    return
 
-                    ctk.CTkLabel(rf, text=str(row['tool_id']), font=("Inter", 10), text_color="gray").grid(row=0, column=0, padx=5, pady=8, sticky="w")
-                    type_color = "#D35400" if row['type'] == "Consumable" else "#1A1A1A"
-                    ctk.CTkLabel(rf, text=row['type'], font=("Inter", 10, "bold"), text_color=type_color).grid(row=0, column=1, padx=5, pady=8, sticky="w")
-                    ctk.CTkLabel(rf, text=row['name'], font=("Inter", 11, "bold"), text_color="black").grid(row=0, column=2, padx=5, pady=8, sticky="w")
-                    ctk.CTkLabel(rf, text=row['uom'], font=("Inter", 10), text_color="gray").grid(row=0, column=3, padx=5, pady=8, sticky="w")
+                for i, row in enumerate(results):
+                    r_idx = i + 1
+                    bg = "#F9FAFB" if i % 2 == 0 else "white"
+
+                    def make_cell(col_idx, text, color, bold=False, wrap=0):
+                        cell = ctk.CTkFrame(cat_inner, fg_color=bg, corner_radius=0)
+                        cell.grid(row=r_idx, column=col_idx, sticky="nsew")
+                        
+                        l = ctk.CTkLabel(cell, text=str(text), font=("Inter", 11, "bold" if bold else "normal"), text_color=color, justify="center")
+                        if wrap > 0:
+                            l.configure(wraplength=wrap)
+                        l.pack(fill="both", expand=True, padx=5, pady=10)
+
+                    make_cell(0, row['tool_id'], "gray")
+                    make_cell(1, row['type'], "#D35400" if row['type'] == "Consumable" else "#1A1A1A", bold=True)
+                    # Safe fixed wraplength ensures it wraps gracefully without lagging the UI
+                    make_cell(2, row['name'], "black", bold=True, wrap=200)
+                    make_cell(3, row['uom'], "gray")
 
                     avail = f"{row['avail']:g}" if row['avail'] else "0"
                     tot = f"{row['total']:g}" if row['total'] else "0"
                     stock_color = "#D8000C" if float(row['avail']) <= 0 else "#2ECC71"
-                    ctk.CTkLabel(rf, text=f"{avail}/{tot}", font=("Inter", 11, "bold"), text_color=stock_color).grid(row=0, column=4, padx=5, pady=8, sticky="w")
+                    make_cell(4, f"{avail}/{tot}", stock_color, bold=True)
 
-                    qty_entry = ctk.CTkEntry(rf, width=55, height=26, takefocus=True)
-                    qty_entry.grid(row=0, column=5, padx=5, pady=8, sticky="w")
-                    
+                    inp_cell = ctk.CTkFrame(cat_inner, fg_color=bg, corner_radius=0)
+                    inp_cell.grid(row=r_idx, column=5, sticky="nsew")
+                    qty_entry = ctk.CTkEntry(inp_cell, width=55, height=26, justify="center")
+                    # pack(expand=True) forces it into dead center of the cell
+                    qty_entry.pack(expand=True, pady=10)
                     qty_entry.bind("<Return>", lambda e, r=row, q_e=qty_entry: self.add_from_catalog(r, q_e, modal))
-                    
-                    ctk.CTkButton(rf, text="+ Add", width=55, height=26, fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 10, "bold"), command=lambda r=row, q_e=qty_entry: self.add_from_catalog(r, q_e, modal)).grid(row=0, column=6, padx=5, pady=8, sticky="w")
 
-                if not list_scroll.winfo_children():
-                    ctk.CTkLabel(list_scroll, text="No items found. Try a different search.", text_color="gray").pack(pady=20)
-            except Exception as e: ctk.CTkLabel(list_scroll, text=f"Error: {e}", text_color="red").pack(pady=10)
+                    btn_cell = ctk.CTkFrame(cat_inner, fg_color=bg, corner_radius=0)
+                    btn_cell.grid(row=r_idx, column=6, sticky="nsew")
+                    btn = ctk.CTkButton(btn_cell, text="+ Add", width=55, height=26, fg_color="#3498DB", hover_color="#2980B9", font=("Inter", 10, "bold"), command=lambda r=row, q_e=qty_entry: self.add_from_catalog(r, q_e, modal))
+                    # Perfectly centered inside cell
+                    btn.pack(expand=True, pady=10)
+
+            except Exception as e: 
+                ctk.CTkLabel(cat_inner, text=f"Error: {e}", text_color="red").grid(row=1, column=0, columnspan=len(cols), pady=10)
             finally:
                 if conn.is_connected(): cursor.close(); conn.close()
 
@@ -483,17 +484,33 @@ class ProjectsView(ctk.CTkFrame):
         ctk.CTkButton(top, text="Search", width=80, fg_color="#F1C40F", text_color="black", hover_color="#D4AC0D", font=("Inter", 11, "bold"), command=lambda: self.load_projects(self.proj_search.get().strip())).pack(side="right", padx=5)
         ctk.CTkButton(top, text="↻ Reset", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=lambda: [self.proj_search.delete(0, "end"), self.load_projects()]).pack(side="right")
 
-        headers = ["ID", "Project Name", "Client", "Project Head", "Status", "Actions"]
-        weights = [1, 3, 2, 2, 1, 1]
-
-        self._make_header(table_card, headers, weights, pad_left=20, pad_right=36)
-
+        # Removed the crashing "both" orientation - back to safe standard vertical scrolling
         self.project_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.project_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+        
         self.load_projects()
 
     def load_projects(self, search_q=""):
         for w in self.project_scroll.winfo_children(): w.destroy()
+        
+        # --- NEW SAFE UNIFORM GRID ---
+        table_inner = ctk.CTkFrame(self.project_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
+
+        headers = ["ID", "Project Name", "Client", "Project Head", "Status", "Actions"]
+        weights = [1, 3, 2, 2, 2, 1] 
+
+        # Enforce exact column alignment
+        for col, w in enumerate(weights):
+            table_inner.grid_columnconfigure(col, weight=w, uniform="p_cols")
+
+        # Header Row
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=5, pady=10)
+
         conn = get_connection()
         if not conn: return
         try:
@@ -515,37 +532,67 @@ class ProjectsView(ctk.CTkFrame):
 
             sql += " ORDER BY p.project_id DESC"
             cursor.execute(sql, tuple(params))
+            results = cursor.fetchall()
 
-            for i, row in enumerate(cursor.fetchall()):
+            if not results:
+                ctk.CTkLabel(table_inner, text="No projects found.", text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
+                return
+
+            for i, row in enumerate(results):
                 row["status"] = row["display_status"]
-                vals = [str(row["project_id"]), row["name"], row["client"], row.get("project_head") or "—", row["status"], ""]
-                weights = [1, 3, 2, 2, 1, 1]
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                rf = self._make_row(self.project_scroll, vals, weights, "#F9FAFB" if i % 2 == 0 else "white")
+                # Define data and a safe fixed text wraplength based on column proportion
+                vals = [
+                    (str(row["project_id"]), 0),
+                    (row["name"], 150),
+                    (row["client"], 100),
+                    (row.get("project_head") or "—", 100),
+                    (row["status"], 100)
+                ]
 
-                for col, (val, w) in enumerate(zip(vals, weights)):
-                    txt_color = "#D35400" if col == 4 and val == "Pending" else ("#2ECC71" if col == 4 and val == "Approved" else "#1A1A1A")
-                    ctk.CTkLabel(rf, text=val, font=("Inter", 11, "bold" if col == 4 else "normal"), text_color=txt_color).grid(row=0, column=col, padx=10, pady=12, sticky="w")
+                # Render Data Cells
+                for col, (val, wrap_l) in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
 
+                    txt_color = "#D35400" if col == 4 and "Pending" in val else ("#2ECC71" if col == 4 and "Approved" in val else "#1A1A1A")
+                    font_w = "bold" if col == 4 else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_color, justify="center")
+                    # Set wrap to ensure long text stacks downward instead of pushing grid wide
+                    if wrap_l > 0:
+                        lbl.configure(wraplength=wrap_l)
+                        
+                    lbl.pack(fill="both", expand=True, padx=10, pady=12)
+
+                # Render Actions Cell Button
+                btn_cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0)
+                btn_cell.grid(row=r_idx, column=5, sticky="nsew")
+                
                 btn_color = "#3498DB" if row['status'] == 'Pending' else "#BDC3C7"
                 btn_text = "Review" if row['status'] == 'Pending' else "View"
-                ctk.CTkButton(rf, text=btn_text, width=65, height=28, fg_color=btn_color, hover_color="#2980B9", font=("Inter", 11, "bold"), command=lambda r=row: self.open_project_modal(r)).grid(row=0, column=5, padx=10, pady=10, sticky="w")
+                
+                btn = ctk.CTkButton(btn_cell, text=btn_text, width=65, height=28, fg_color=btn_color, hover_color="#2980B9", font=("Inter", 11, "bold"), command=lambda r=row: self.open_project_modal(r))
+                # expand=True forces the button perfectly into the horizontal and vertical center
+                btn.pack(expand=True, pady=10)
 
         except Exception as e:
-            ctk.CTkLabel(self.project_scroll, text=f"Error loading projects: {e}", text_color="red").pack(pady=20)
+            ctk.CTkLabel(table_inner, text=f"Error loading projects: {e}", text_color="red").grid(row=1, column=0, columnspan=len(headers), pady=20)
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
     def open_project_modal(self, row):
         modal = ctk.CTkToplevel(self)
         modal.title(f"Project Overview: {row['name']}")
-        modal.geometry("580x720")
+        modal.geometry("650x750") # Added extra space so description doesn't clip
         modal.configure(fg_color="white")
         modal.attributes("-topmost", True)
         modal.grab_set()
         modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (580 // 2)
-        y = (modal.winfo_screenheight() // 2) - (720 // 2)
+        x = (modal.winfo_screenwidth() // 2) - (650 // 2)
+        y = (modal.winfo_screenheight() // 2) - (750 // 2)
         modal.geometry(f"+{x}+{y}")
 
         ctk.CTkLabel(modal, text=row['name'], font=("Inter", 18, "bold"), text_color="black").pack(pady=(20, 3))
@@ -562,7 +609,7 @@ class ProjectsView(ctk.CTkFrame):
             row_f = ctk.CTkFrame(details_frame, fg_color="transparent")
             row_f.pack(fill="x", padx=15, pady=(5, 0))
             ctk.CTkLabel(row_f, text=lbl, font=("Inter", 11, "bold"), text_color="#1E4528", width=140, anchor="w").pack(side="left")
-            ctk.CTkLabel(row_f, text=val or "None specified", font=("Inter", 11), text_color="black", wraplength=360, justify="left").pack(side="left")
+            ctk.CTkLabel(row_f, text=val or "None specified", font=("Inter", 11), text_color="black", wraplength=400, justify="left").pack(side="left", fill="x", expand=True)
 
         add_detail("Client:", row['client'])
         add_detail("Site Location:", row['location'])

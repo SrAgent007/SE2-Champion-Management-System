@@ -27,9 +27,10 @@ class InventoryView(ctk.CTkFrame):
         # 3. Global UI Fix: Scrollable content area mapping
         self.tab_content = ctk.CTkFrame(self, fg_color="transparent")
         self.tab_content.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 20))
-        # 4. Global UI Fix: Standardize column weights so panels extend fully
+        
+        # 4. Give the Right Table panel significantly more weight and a strong minimum width
         self.tab_content.grid_columnconfigure(0, weight=1, minsize=380) # Left Form
-        self.tab_content.grid_columnconfigure(1, weight=2, minsize=600) # Right Table
+        self.tab_content.grid_columnconfigure(1, weight=3, minsize=750) # Right Table
         self.tab_content.grid_rowconfigure(0, weight=1)
 
         self.switch_tab()
@@ -67,7 +68,7 @@ class InventoryView(ctk.CTkFrame):
         self.uom_menu = ctk.CTkOptionMenu(uom_frame, values=["pcs", "boxes", "sets", "kg", "rolls", "packs", "liters", "meters", "feet"], fg_color="#E8F8F5", text_color="black")
         self.uom_menu.pack(fill="x", pady=(5, 0))
 
-        ctk.CTkLabel(form_card, text="💡 Consumables (e.g. boxes of nails) support fractional returns. (e.g., return 0.5 for half box).", font=("Inter", 10), text_color="gray", justify="left", wraplength=270).pack(anchor="w", padx=20, pady=(0, 10))
+        ctk.CTkLabel(form_card, text="💡 Consumables (e.g. boxes of nails) support fractional returns. (e.g., return 0.5 for half box).", font=("Inter", 10), text_color="gray", justify="left", wraplength=300).pack(anchor="w", padx=20, pady=(0, 10))
 
         ctk.CTkLabel(form_card, text="Product Name *", font=("Inter", 11, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20)
         self.name_entry = ctk.CTkEntry(form_card, placeholder_text="e.g., #2 Nails (Box)")
@@ -106,7 +107,6 @@ class InventoryView(ctk.CTkFrame):
         self.loc_entry = ctk.CTkEntry(form_card, placeholder_text="e.g., Shelf A1")
         self.loc_entry.pack(fill="x", padx=20, pady=(5, 15))
 
-        # 5. Global UI Fix: Keyboard Traversal injected!
         self.name_entry.bind("<Return>", lambda e: self.desc_entry.focus_set())
         self.desc_entry.bind("<Return>", lambda e: self.price_entry.focus_set())
         self.price_entry.bind("<Return>", lambda e: self.qty_entry.focus_set())
@@ -143,34 +143,6 @@ class InventoryView(ctk.CTkFrame):
         finally:
             if conn.is_connected(): cursor.close(); conn.close()
 
-    def _get_column_min_sizes(self, weights, base_width=None):
-        # Use standard base_width to prevent layout exploding on wide screens
-        if base_width is None:
-            base_width = 900
-        total = sum(weights) or 1
-        return [max(80, int((w / total) * base_width)) for w in weights]
-
-    def _make_table_header(self, parent, headers, weights, pad_left=20, pad_right=36):
-        header_frame = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
-        header_frame.pack(fill="x", padx=(pad_left, pad_right))
-        header_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (text, weight) in enumerate(zip(headers, weights)):
-            header_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-            ctk.CTkLabel(header_frame, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center").grid(row=0, column=col, padx=10, pady=10, sticky="ew")
-        return header_frame
-
-    def _make_table_row(self, parent, values, weights, bg):
-        row_frame = ctk.CTkFrame(parent, fg_color=bg, height=40)
-        row_frame.pack(fill="x", pady=2)
-        row_frame.pack_propagate(False)
-
-        min_sizes = self._get_column_min_sizes(weights)
-        for col, (value, weight) in enumerate(zip(values, weights)):
-            row_frame.grid_columnconfigure(col, weight=weight, minsize=min_sizes[col])
-        return row_frame
-
     def build_right_table(self, parent):
         table_card = ctk.CTkFrame(parent, fg_color="white", corner_radius=10)
         table_card.grid(row=0, column=1, sticky="nsew", padx=(5, 10))
@@ -190,11 +162,8 @@ class InventoryView(ctk.CTkFrame):
 
         self.reset_btn = ctk.CTkButton(search_frame, text="↻ Reset", width=70, fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC", font=("Inter", 11, "bold"), command=self.reset_search)
         self.reset_btn.pack(side="left", padx=(0, 0))
-
-        self.headers = ["PID", "Type", "Name", "Category", "Supplier", "Qty Avail.", "UoM", "Location", "Status"]
-        self.weights = [1, 1, 2, 2, 2, 1, 1, 2, 1]
-
-        self._make_table_header(table_card, self.headers, self.weights, pad_left=20, pad_right=36)
+        
+        ctk.CTkLabel(search_frame, text="💡 Click any row to View/Edit", font=("Inter", 11, "italic"), text_color="gray").pack(side="right")
 
         self.data_scroll = ctk.CTkScrollableFrame(table_card, fg_color="transparent")
         self.data_scroll.pack(fill="both", expand=True, padx=20, pady=(5, 20))
@@ -204,8 +173,27 @@ class InventoryView(ctk.CTkFrame):
             widget.destroy()
         self.tool_hash_table.clear()
 
-        is_archived = 0
+        table_inner = ctk.CTkFrame(self.data_scroll, fg_color="transparent")
+        table_inner.pack(fill="x", expand=True)
 
+        headers = ["PID", "Type", "Name", "Category", "Supplier", "Qty Avail.", "UoM", "Location", "Status"]
+        
+        # PERFECTED ALIGNMENT: 
+        # Stronger emphasis on wider minimum widths to guarantee NO unreadable squishing.
+        # Removed the "uniform" tag to allow the grid to breathe naturally.
+        weights = [1, 1, 3, 2, 2, 1, 1, 3, 1]
+        min_sizes = [50, 80, 160, 100, 100, 70, 50, 130, 80]
+
+        for col, (w, min_w) in enumerate(zip(weights, min_sizes)):
+            table_inner.grid_columnconfigure(col, weight=w, minsize=min_w)
+
+        for col, text in enumerate(headers):
+            cell = ctk.CTkFrame(table_inner, fg_color="#1E4528", corner_radius=0)
+            cell.grid(row=0, column=col, sticky="nsew", pady=(0, 2))
+            lbl = ctk.CTkLabel(cell, text=text, font=("Inter", 11, "bold"), text_color="white", anchor="center")
+            lbl.pack(fill="both", expand=True, padx=2, pady=10)
+
+        is_archived = 0
         conn = get_connection()
         if not conn:
             return
@@ -251,6 +239,10 @@ class InventoryView(ctk.CTkFrame):
             cursor.execute(base_query, tuple(params))
             results = cursor.fetchall()
 
+            if not results:
+                ctk.CTkLabel(table_inner, text="No inventory found.", text_color="gray").grid(row=1, column=0, columnspan=len(headers), pady=20)
+                return
+
             for i, row in enumerate(results):
                 pid = str(row['tool_id'])
                 row['location'] = row['base_location'] 
@@ -263,23 +255,46 @@ class InventoryView(ctk.CTkFrame):
                 if row.get('active_project') and float(row['qty_avail']) < float(row['qty_tot']):
                     display_loc = f"Deployed: {row['active_project']}"
 
-                display_data = [
-                    pid, row['item_type'], row['name'], row['category'],
-                    row['supplier'], f"{avail}/{tot}", row['uom'],
-                    display_loc, row['status']
+                vals = [
+                    pid,
+                    row['item_type'],
+                    row['name'],
+                    row['category'],
+                    row['supplier'],
+                    f"{avail}/{tot}",
+                    row['uom'],
+                    display_loc,
+                    row['status']
                 ]
 
-                row_frame = self._make_table_row(self.data_scroll, display_data, self.weights, "#F9FAFB" if i % 2 == 0 else "white")
-                row_frame.bind("<Button-1>", lambda e, lookup_id=pid: self.open_tool_modal(lookup_id))
+                r_idx = i + 1
+                bg = "#F9FAFB" if i % 2 == 0 else "white"
 
-                for col, (text, weight) in enumerate(zip(display_data, self.weights)):
-                    if col == 7 and "Deployed:" in str(text):
+                for col, val in enumerate(vals):
+                    cell = ctk.CTkFrame(table_inner, fg_color=bg, corner_radius=0, cursor="hand2")
+                    cell.grid(row=r_idx, column=col, sticky="nsew")
+
+                    txt_col = "#1A1A1A"
+                    if col == 7 and "Deployed:" in val: 
                         txt_col = "#2980B9"
-                    else:
-                        txt_col = "#D35400" if col == 1 and text == "Consumable" else "#1A1A1A"
+                    elif col == 1 and val == "Consumable": 
+                        txt_col = "#D35400"
                         
-                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11, "bold" if col == 1 or (col == 7 and "Deployed:" in str(text)) else "normal"), text_color=txt_col)
-                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                    font_w = "bold" if col == 1 or (col == 7 and "Deployed:" in val) else "normal"
+
+                    lbl = ctk.CTkLabel(cell, text=val, font=("Inter", 11, font_w), text_color=txt_col, justify="center", anchor="center", cursor="hand2")
+                    
+                    # SAFE AUTO-WRAP: Uses the strict minimum widths to ensure text NEVER squishes unreadably
+                    def set_wrap(e, l=lbl, m=min_sizes[col]):
+                        target_wrap = max(m - 10, e.width - 10)
+                        if not hasattr(l, '_last_wrap') or abs(l._last_wrap - target_wrap) > 5:
+                            l.configure(wraplength=target_wrap)
+                            l._last_wrap = target_wrap
+                    cell.bind("<Configure>", set_wrap)
+                    
+                    lbl.pack(fill="both", expand=True, padx=4, pady=12)
+
+                    cell.bind("<Button-1>", lambda e, lookup_id=pid: self.open_tool_modal(lookup_id))
                     lbl.bind("<Button-1>", lambda e, lookup_id=pid: self.open_tool_modal(lookup_id))
 
             uid = self.user_info.get("user_id")
@@ -357,15 +372,15 @@ class InventoryView(ctk.CTkFrame):
         data = self.tool_hash_table.get(lookup_id)
         if not data: return
         
-        is_arch = 0  # Archived items are now managed exclusively in the Maintenance module
+        is_arch = 0
 
         modal = ctk.CTkToplevel(self)
         modal.title(f"Manage Item: {lookup_id}")
-        modal.geometry("480x750")
+        modal.geometry("550x750")
         modal.configure(fg_color="white")
         modal.attributes("-topmost", True)
         modal.update_idletasks()
-        x = (modal.winfo_screenwidth() // 2) - (480 // 2)
+        x = (modal.winfo_screenwidth() // 2) - (550 // 2)
         y = (modal.winfo_screenheight() // 2) - (750 // 2)
         modal.geometry(f"+{x}+{y}")
         modal.grab_set()
@@ -407,7 +422,7 @@ class InventoryView(ctk.CTkFrame):
 
         loc_entry = create_modal_row(form_scroll, "Location", data['location'])
 
-        ctk.CTkLabel(form_scroll, text="ℹ  For consumables (boxes, kg, sets): fractional quantities are supported.\n   e.g., set Total Qty to 2.5 if half a box was partially used.", font=("Inter", 10), text_color="gray", justify="left", wraplength=380).pack(anchor="w", pady=(3, 5))
+        ctk.CTkLabel(form_scroll, text="ℹ  For consumables (boxes, kg, sets): fractional quantities are supported.\n   e.g., set Total Qty to 2.5 if half a box was partially used.", font=("Inter", 10), text_color="gray", justify="left", wraplength=450).pack(anchor="w", pady=(3, 5))
 
         status_frame = ctk.CTkFrame(form_scroll, fg_color="transparent")
         status_frame.pack(fill="x", pady=4)

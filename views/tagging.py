@@ -56,6 +56,7 @@ class TaggingView(ctk.CTkFrame):
         total = sum(weights) or 1
         return [max(80, int((w / total) * base_width)) for w in weights]
 
+
     def _make_header(self, parent, headers, weights, pad_left=20, pad_right=36):
         header = ctk.CTkFrame(parent, fg_color="#1E4528", corner_radius=5, height=40)
         header.pack(fill="x", padx=(pad_left, pad_right))
@@ -126,8 +127,8 @@ class TaggingView(ctk.CTkFrame):
                     txt_color = "#D8000C" if col == 7 and text == "Unassigned" else "#1A1A1A"
                     font_weight = "bold" if col == 7 and text != "Unassigned" else "normal"
                     
-                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11, font_weight), text_color=txt_color)
-                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="w")
+                    lbl = ctk.CTkLabel(row_frame, text=text, font=("Inter", 11, font_weight), text_color=txt_color, anchor="center")
+                    lbl.grid(row=0, column=col, padx=10, pady=10, sticky="ew")
                     lbl.bind("<Button-1>", lambda e, data=full_data: self.open_tag_manager(data))
 
         except Exception as e:

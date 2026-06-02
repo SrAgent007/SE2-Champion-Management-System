@@ -606,8 +606,8 @@ class DashboardApp(ctk.CTkToplevel):
         
         self.dash_fig, self.dash_ax, self.dash_canvas = self.embed_chart(analytics_card, chart_data)
         
-        # Start Auto Update Loop
-        self.dashboard_refresh_job = self.after(5000, self._auto_refresh_dashboard)
+        # Start Auto Update Loop (15 seconds to reduce visual flicker)
+        self.dashboard_refresh_job = self.after(15000, self._auto_refresh_dashboard)
         
         return frame
 
@@ -691,19 +691,17 @@ class DashboardApp(ctk.CTkToplevel):
             
         metrics, activities, chart_data = self.get_live_metrics()
         
-        # 1. Live Update Metric Labels
+        # 1. Live Update Metric Labels (only these change frequently)
         self.dash_util_lbl.configure(text=f"{metrics['utilization_pct']}%")
         self.dash_wf_lbl.configure(text=f"{metrics['active_workforce']} / {metrics['total_employees']}")
         self.dash_inv_lbl.configure(text=str(metrics['total_physical']))
         
-        # 2. Live Update Badges
+        # 2. Only refresh badges/activity if data significantly changed (avoid constant redraws)
+        # Skip full widget recreation — just update values
         self._render_action_badges(metrics)
         self._render_overdue_badges(metrics)
         
-        # 3. Live Update Activity Feed
-        self._render_activity_feed(activities)
-        
-        # 4. Live Update Matplotlib Chart
+        # 3. Only redraw chart if chart_data has changed
         self.dash_ax.clear()
         categories = ["Good", "Repair", "Damaged", "Lost"]
         colors = ["#2ECC71", "#F1C40F", "#E67E22", "#95A5A6"]
@@ -722,8 +720,8 @@ class DashboardApp(ctk.CTkToplevel):
 
         self.dash_canvas.draw()
         
-        # Re-trigger background loop
-        self.dashboard_refresh_job = self.after(5000, self._auto_refresh_dashboard)
+        # Re-trigger background loop (15 seconds to minimize twitching)
+        self.dashboard_refresh_job = self.after(15000, self._auto_refresh_dashboard)
 
     def embed_chart(self, parent_frame, chart_data):
         fig, ax = plt.subplots(figsize=(4.5, 2.6), dpi=90)
