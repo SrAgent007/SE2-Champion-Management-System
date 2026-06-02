@@ -193,18 +193,88 @@ class HelpView(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+        self._ensure_custom_table()
         self.build_ui()
+
+    # ------------------------------------------------------------------
+    # DB helpers for custom help content
+    # ------------------------------------------------------------------
+    def _ensure_custom_table(self):
+        """Create help_custom_items table if it does not yet exist."""
+        conn = get_connection()
+        if not conn:
+            return
+        try:
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS help_custom_items (
+                    item_id     INT AUTO_INCREMENT PRIMARY KEY,
+                    item_type   VARCHAR(10)  NOT NULL COMMENT 'guide or faq',
+                    admin_only  TINYINT(1)   NOT NULL DEFAULT 0,
+                    title       VARCHAR(255) NOT NULL,
+                    content     TEXT         NOT NULL,
+                    created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+        except Exception as e:
+            print(f"help_custom_items init error: {e}")
+        finally:
+            if conn.is_connected():
+                c.close()
+                conn.close()
+
+    def _fetch_custom_items(self, item_type):
+        """Return list of dicts for the given item_type ('guide' or 'faq')."""
+        rows = []
+        conn = get_connection()
+        if not conn:
+            return rows
+        try:
+            c = conn.cursor(dictionary=True)
+            c.execute(
+                "SELECT * FROM help_custom_items WHERE item_type = %s ORDER BY item_id ASC",
+                (item_type,)
+            )
+            rows = c.fetchall()
+        except Exception as e:
+            print(f"_fetch_custom_items error: {e}")
+        finally:
+            if conn.is_connected():
+                c.close()
+                conn.close()
+        return rows
+
+    def _delete_custom_item(self, item_id):
+        conn = get_connection()
+        if not conn:
+            return
+        try:
+            c = conn.cursor()
+            c.execute(
+                "DELETE FROM help_custom_items WHERE item_id = %s", (item_id,))
+            conn.commit()
+        except Exception as e:
+            print(f"_delete_custom_item error: {e}")
+        finally:
+            if conn.is_connected():
+                c.close()
+                conn.close()
 
     def build_ui(self):
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
         top_bar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
 
-        ctk.CTkLabel(top_bar, text="Help & Support Hub", font=("Inter", 20, "bold"), text_color="#1A1A1A").pack(side="left", padx=20)
-        ctk.CTkLabel(top_bar, text="Looking to export data? Use the 'Reports' module for PDF generation.", font=("Inter", 11, "italic"), text_color="#3498DB").pack(side="left", padx=10)
+        ctk.CTkLabel(top_bar, text="Help & Support Hub", font=(
+            "Inter", 20, "bold"), text_color="#1A1A1A").pack(side="left", padx=20)
+        ctk.CTkLabel(top_bar, text="Looking to export data? Use the 'Reports' module for PDF generation.", font=(
+            "Inter", 11, "italic"), text_color="#3498DB").pack(side="left", padx=10)
 
         tabs = ["Help Guide", "FAQs", "System Requirements", "Support Tickets"]
+        if self.is_admin:
+            tabs.append("Manage Help Content")
         self.tab_var = ctk.StringVar(value=tabs[0])
-        
+
         self.seg_btn = ctk.CTkSegmentedButton(
             top_bar, values=tabs, variable=self.tab_var, command=self.switch_tab,
             fg_color="#F0F0F0", selected_color="#1E4528", selected_hover_color="#14301C"
@@ -212,19 +282,28 @@ class HelpView(ctk.CTkFrame):
         self.seg_btn.pack(side="right", padx=20)
         self.seg_btn.set(tabs[0])
 
-        self.tab_content = ctk.CTkFrame(self, fg_color="white", corner_radius=10)
-        self.tab_content.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        self.tab_content = ctk.CTkFrame(
+            self, fg_color="white", corner_radius=10)
+        self.tab_content.grid(
+            row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
         self.tab_content.grid_columnconfigure(0, weight=1)
         self.tab_content.grid_rowconfigure(0, weight=1)
-        
+
         self.switch_tab(tabs[0])
 
     def switch_tab(self, selected_tab):
-        for widget in self.tab_content.winfo_children(): widget.destroy()
-        if selected_tab == "Help Guide": self.render_guide_tab()
-        elif selected_tab == "FAQs": self.render_faq_tab()
-        elif selected_tab == "System Requirements": self.render_sysreq_tab()
-        elif selected_tab == "Support Tickets": self.render_tickets_tab()
+        for widget in self.tab_content.winfo_children():
+            widget.destroy()
+        if selected_tab == "Help Guide":
+            self.render_guide_tab()
+        elif selected_tab == "FAQs":
+            self.render_faq_tab()
+        elif selected_tab == "System Requirements":
+            self.render_sysreq_tab()
+        elif selected_tab == "Support Tickets":
+            self.render_tickets_tab()
+        elif selected_tab == "Manage Help Content":
+            self.render_manage_tab()
 
     def _build_search_bar(self, parent, on_search, placeholder="Search keywords..."):
         bar = ctk.CTkFrame(parent, fg_color="transparent")
@@ -303,6 +382,28 @@ class HelpView(ctk.CTkFrame):
                              wraplength=780, justify="left").pack(anchor="w", padx=14, pady=1)
             ctk.CTkFrame(card, height=6, fg_color="transparent").pack()
 
+        # Custom DB guide entries
+        for row in self._fetch_custom_items("guide"):
+            if row["admin_only"] and not self.is_admin:
+                continue
+            points_db = [p.strip()
+                         for p in row["content"].split("\n") if p.strip()]
+            if keyword and not self._section_matches(row["title"], points_db, keyword):
+                continue
+
+            found_any = True
+            card = ctk.CTkFrame(scroll, fg_color="#EFF9F3", corner_radius=8,
+                                border_width=1, border_color="#B2DFCA")
+            card.pack(fill="x", padx=10, pady=(0, 6))
+
+            ctk.CTkLabel(card, text=row["title"], font=("Inter", 12, "bold"),
+                         text_color="#1E4528").pack(anchor="w", padx=14, pady=(8, 3))
+            for point in points_db:
+                ctk.CTkLabel(card, text=f"  •  {point}",
+                             font=("Inter", 11), text_color="#1A1A1A",
+                             wraplength=780, justify="left").pack(anchor="w", padx=14, pady=1)
+            ctk.CTkFrame(card, height=6, fg_color="transparent").pack()
+
         if not found_any:
             ctk.CTkLabel(scroll, text=f'No sections found for "{keyword}".',
                          text_color="gray").pack(pady=20)
@@ -358,6 +459,26 @@ class HelpView(ctk.CTkFrame):
                          wraplength=780, justify="left").pack(anchor="w", padx=14, pady=(0, 10))
             idx += 1
 
+        # Custom DB FAQ entries
+        for row in self._fetch_custom_items("faq"):
+            if row["admin_only"] and not self.is_admin:
+                continue
+            if keyword and not self._section_matches(row["title"], [row["content"]], keyword):
+                continue
+
+            found_any = True
+            card = ctk.CTkFrame(scroll, fg_color="#EFF9F3", corner_radius=8,
+                                border_width=1, border_color="#B2DFCA")
+            card.pack(fill="x", padx=10, pady=(0, 6))
+
+            ctk.CTkLabel(card, text=f"Q{idx}.  {row['title']}",
+                         font=("Inter", 11, "bold"), text_color="#1E4528",
+                         wraplength=780, justify="left").pack(anchor="w", padx=14, pady=(10, 2))
+            ctk.CTkLabel(card, text=f"      {row['content']}",
+                         font=("Inter", 11), text_color="#1A1A1A",
+                         wraplength=780, justify="left").pack(anchor="w", padx=14, pady=(0, 10))
+            idx += 1
+
         if not found_any:
             ctk.CTkLabel(scroll, text=f'No FAQs found for "{keyword}".',
                          text_color="gray").pack(pady=20)
@@ -381,7 +502,8 @@ class HelpView(ctk.CTkFrame):
             ("Operating System", "Windows 10 (64-bit) — recommended and tested"),
             ("Display",          "Minimum 1280×720 resolution (1920×1080 recommended)"),
             ("Webcam",           "HD Webcam 1080P — required for QR scanning features"),
-            ("Printer",          "Any standard printer — required for label and receipt printing"),
+            ("Printer",
+             "Any standard printer — required for label and receipt printing"),
             ("Network",          "LAN connection for database access (no internet required)"),
         ]
         software_specs = [
@@ -426,7 +548,8 @@ class HelpView(ctk.CTkFrame):
     # SUPPORT TICKETS TAB
     # ==========================================
     def render_tickets_tab(self):
-        frame = ctk.CTkFrame(self.tab_content, fg_color="white", corner_radius=10)
+        frame = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.grid_columnconfigure(0, weight=1)
         frame.grid_rowconfigure(1, weight=1)
@@ -445,91 +568,400 @@ class HelpView(ctk.CTkFrame):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )''')
                 conn.commit()
-            except Exception: pass
+            except Exception:
+                pass
             finally:
-                if conn.is_connected(): c.close(); conn.close()
+                if conn.is_connected():
+                    c.close()
+                    conn.close()
 
         if not self.is_admin:
             form_bg = ctk.CTkFrame(frame, fg_color="#F9FAFB", corner_radius=10)
             form_bg.pack(fill="x", padx=20, pady=(20, 10))
-            
-            ctk.CTkLabel(form_bg, text="Submit an Inquiry", font=("Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=15, pady=(15, 5))
-            
+
+            ctk.CTkLabel(form_bg, text="Submit an Inquiry", font=(
+                "Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=15, pady=(15, 5))
+
             subj_entry = ctk.CTkEntry(form_bg, placeholder_text="Subject...")
             subj_entry.pack(fill="x", padx=15, pady=5)
-            
+
             msg_entry = ctk.CTkTextbox(form_bg, height=60)
             msg_entry.pack(fill="x", padx=15, pady=5)
-            
+
             def submit_ticket():
                 subj = subj_entry.get().strip()
                 msg = msg_entry.get("1.0", "end-1c").strip()
                 if not subj or not msg:
-                    messagebox.showerror("Error", "Subject and message required.", parent=self.winfo_toplevel())
+                    messagebox.showerror(
+                        "Error", "Subject and message required.", parent=self.winfo_toplevel())
                     return
-                
+
                 db = get_connection()
                 if db:
                     c = db.cursor()
-                    c.execute("INSERT INTO help_tickets (user_id, subject, message) VALUES (%s, %s, %s)", (self.user_info['user_id'], subj, msg))
-                    db.commit(); c.close(); db.close()
-                    messagebox.showinfo("Success", "Ticket submitted to the Admin.", parent=self.winfo_toplevel())
-                    subj_entry.delete(0, 'end'); msg_entry.delete("1.0", "end")
+                    c.execute("INSERT INTO help_tickets (user_id, subject, message) VALUES (%s, %s, %s)", (
+                        self.user_info['user_id'], subj, msg))
+                    db.commit()
+                    c.close()
+                    db.close()
+                    messagebox.showinfo(
+                        "Success", "Ticket submitted to the Admin.", parent=self.winfo_toplevel())
+                    subj_entry.delete(0, 'end')
+                    msg_entry.delete("1.0", "end")
                     load_ticket_list()
 
-            ctk.CTkButton(form_bg, text="Send to Admin", fg_color="#1E4528", hover_color="#14301C", command=submit_ticket).pack(anchor="e", padx=15, pady=(5, 15))
+            ctk.CTkButton(form_bg, text="Send to Admin", fg_color="#1E4528", hover_color="#14301C",
+                          command=submit_ticket).pack(anchor="e", padx=15, pady=(5, 15))
 
-        ctk.CTkLabel(frame, text="Ticket Inbox" if self.is_admin else "My Previous Tickets", font=("Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(10, 5))
-        
+        ctk.CTkLabel(frame, text="Ticket Inbox" if self.is_admin else "My Previous Tickets", font=(
+            "Inter", 14, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=20, pady=(10, 5))
+
         scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
         def load_ticket_list():
-            for w in scroll.winfo_children(): w.destroy()
+            for w in scroll.winfo_children():
+                w.destroy()
             db = get_connection()
-            if not db: return
+            if not db:
+                return
             try:
                 c = db.cursor(dictionary=True)
                 if self.is_admin:
-                    c.execute("SELECT h.*, u.full_name FROM help_tickets h JOIN user u ON h.user_id = u.user_id ORDER BY h.status ASC, h.created_at DESC")
+                    c.execute(
+                        "SELECT h.*, u.full_name FROM help_tickets h JOIN user u ON h.user_id = u.user_id ORDER BY h.status ASC, h.created_at DESC")
                 else:
-                    c.execute("SELECT h.*, u.full_name FROM help_tickets h JOIN user u ON h.user_id = u.user_id WHERE h.user_id = %s ORDER BY h.created_at DESC", (self.user_info['user_id'],))
-                
+                    c.execute(
+                        "SELECT h.*, u.full_name FROM help_tickets h JOIN user u ON h.user_id = u.user_id WHERE h.user_id = %s ORDER BY h.created_at DESC", (self.user_info['user_id'],))
+
                 for t in c.fetchall():
-                    card = ctk.CTkFrame(scroll, fg_color="#F9FAFB", corner_radius=8, border_width=1, border_color="#E0E0E0")
+                    card = ctk.CTkFrame(
+                        scroll, fg_color="#F9FAFB", corner_radius=8, border_width=1, border_color="#E0E0E0")
                     card.pack(fill="x", pady=5)
-                    
+
                     header = ctk.CTkFrame(card, fg_color="transparent")
                     header.pack(fill="x", padx=15, pady=(10, 5))
-                    
+
                     status_col = "#D8000C" if t['status'] == 'Open' else "#2ECC71"
-                    ctk.CTkLabel(header, text=f"[{t['status']}]", font=("Inter", 12, "bold"), text_color=status_col).pack(side="left", padx=(0, 10))
-                    ctk.CTkLabel(header, text=t['subject'], font=("Inter", 12, "bold"), text_color="#1A1A1A").pack(side="left")
+                    ctk.CTkLabel(header, text=f"[{t['status']}]", font=(
+                        "Inter", 12, "bold"), text_color=status_col).pack(side="left", padx=(0, 10))
+                    ctk.CTkLabel(header, text=t['subject'], font=(
+                        "Inter", 12, "bold"), text_color="#1A1A1A").pack(side="left")
                     if self.is_admin:
-                        ctk.CTkLabel(header, text=f"From: {t['full_name']}", font=("Inter", 11), text_color="gray").pack(side="right")
-                        
-                    ctk.CTkLabel(card, text=t['message'], font=("Inter", 11), text_color="#555555", justify="left", wraplength=700).pack(anchor="w", padx=15, pady=5)
-                    
+                        ctk.CTkLabel(header, text=f"From: {t['full_name']}", font=(
+                            "Inter", 11), text_color="gray").pack(side="right")
+
+                    ctk.CTkLabel(card, text=t['message'], font=(
+                        "Inter", 11), text_color="#555555", justify="left", wraplength=700).pack(anchor="w", padx=15, pady=5)
+
                     if t['admin_reply']:
-                        reply_box = ctk.CTkFrame(card, fg_color="#E8F8F5", corner_radius=5)
+                        reply_box = ctk.CTkFrame(
+                            card, fg_color="#E8F8F5", corner_radius=5)
                         reply_box.pack(fill="x", padx=15, pady=(5, 10))
-                        ctk.CTkLabel(reply_box, text=f"Admin Reply: {t['admin_reply']}", font=("Inter", 11, "bold"), text_color="#1E4528", justify="left", wraplength=650).pack(anchor="w", padx=10, pady=10)
+                        ctk.CTkLabel(reply_box, text=f"Admin Reply: {t['admin_reply']}", font=(
+                            "Inter", 11, "bold"), text_color="#1E4528", justify="left", wraplength=650).pack(anchor="w", padx=10, pady=10)
                     elif self.is_admin and t['status'] == 'Open':
-                        reply_entry = ctk.CTkEntry(card, placeholder_text="Type reply here...")
+                        reply_entry = ctk.CTkEntry(
+                            card, placeholder_text="Type reply here...")
                         reply_entry.pack(fill="x", padx=15, pady=5)
-                        
+
                         def send_reply(tid=t['ticket_id'], e=reply_entry):
                             rep = e.get().strip()
-                            if not rep: return
+                            if not rep:
+                                return
                             cx = get_connection()
                             cur = cx.cursor()
-                            cur.execute("UPDATE help_tickets SET admin_reply = %s, status = 'Resolved' WHERE ticket_id = %s", (rep, tid))
-                            cx.commit(); cur.close(); cx.close()
+                            cur.execute(
+                                "UPDATE help_tickets SET admin_reply = %s, status = 'Resolved' WHERE ticket_id = %s", (rep, tid))
+                            cx.commit()
+                            cur.close()
+                            cx.close()
                             load_ticket_list()
-                            
-                        ctk.CTkButton(card, text="Reply & Resolve", width=120, height=28, fg_color="#3498DB", hover_color="#2980B9", command=send_reply).pack(anchor="e", padx=15, pady=(0, 10))
-            except Exception: pass
+
+                        ctk.CTkButton(card, text="Reply & Resolve", width=120, height=28, fg_color="#3498DB",
+                                      hover_color="#2980B9", command=send_reply).pack(anchor="e", padx=15, pady=(0, 10))
+            except Exception:
+                pass
             finally:
-                if db.is_connected(): c.close(); db.close()
-                
+                if db.is_connected():
+                    c.close()
+                    db.close()
+
         load_ticket_list()
+
+    # ==========================================
+    # MANAGE HELP CONTENT TAB  (Admin only)
+    # ==========================================
+    def render_manage_tab(self):
+        """
+        Full CRUD panel for custom Help Guide sections and FAQ entries.
+        Hard-coded GUIDE_SECTIONS / FAQS are read-only; only DB rows
+        (help_custom_items) are editable here.
+        """
+        outer = ctk.CTkFrame(
+            self.tab_content, fg_color="white", corner_radius=10)
+        outer.grid(row=0, column=0, sticky="nsew")
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_rowconfigure(1, weight=1)
+
+        # Header
+        hdr = ctk.CTkFrame(outer, fg_color="transparent")
+        hdr.pack(fill="x", padx=20, pady=(16, 0))
+        ctk.CTkLabel(hdr, text="Manage Help Content",
+                     font=("Inter", 18, "bold"), text_color="#1E4528").pack(side="left")
+        ctk.CTkLabel(hdr,
+                     text="Add, edit, or delete custom Guide sections and FAQs. Built-in entries are read-only.",
+                     font=("Inter", 11, "italic"), text_color="gray").pack(side="left", padx=12)
+
+        # Split: left = form, right = existing custom items list
+        body = ctk.CTkFrame(outer, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=15, pady=10)
+        body.grid_columnconfigure(0, weight=2)
+        body.grid_columnconfigure(1, weight=3)
+        body.grid_rowconfigure(0, weight=1)
+
+        # ── LEFT: Add / Edit Form ──────────────────────────────────────
+        form_card = ctk.CTkFrame(body, fg_color="#F9FAFB", corner_radius=8)
+        form_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+
+        self._manage_editing_id = None  # None = Add mode, int = Edit mode
+
+        ctk.CTkLabel(form_card, text="Add / Edit Item",
+                     font=("Inter", 13, "bold"), text_color="#1A1A1A").pack(anchor="w", padx=15, pady=(14, 6))
+
+        # Type selector
+        type_row = ctk.CTkFrame(form_card, fg_color="transparent")
+        type_row.pack(fill="x", padx=15, pady=(0, 6))
+        ctk.CTkLabel(type_row, text="Type:", font=("Inter", 11, "bold"),
+                     text_color="#555555", width=80, anchor="w").pack(side="left")
+        self._manage_type_var = ctk.StringVar(value="guide")
+        ctk.CTkRadioButton(type_row, text="Help Guide Section",
+                           variable=self._manage_type_var, value="guide",
+                           font=("Inter", 11), text_color="#1A1A1A").pack(side="left", padx=(0, 10))
+        ctk.CTkRadioButton(type_row, text="FAQ Entry",
+                           variable=self._manage_type_var, value="faq",
+                           font=("Inter", 11), text_color="#1A1A1A").pack(side="left")
+
+        # Admin-only toggle
+        admin_row = ctk.CTkFrame(form_card, fg_color="transparent")
+        admin_row.pack(fill="x", padx=15, pady=(0, 6))
+        self._manage_admin_var = ctk.IntVar(value=0)
+        ctk.CTkCheckBox(admin_row, text="Admin-only (hidden from Staff)",
+                        variable=self._manage_admin_var,
+                        font=("Inter", 11), text_color="#1A1A1A",
+                        checkbox_width=18, checkbox_height=18,
+                        border_color="#D1D5DB").pack(anchor="w")
+
+        # Title field
+        ctk.CTkLabel(form_card, text="Title / Question:",
+                     font=("Inter", 11, "bold"), text_color="#555555").pack(anchor="w", padx=15, pady=(4, 2))
+        self._manage_title_entry = ctk.CTkEntry(
+            form_card, placeholder_text="e.g.  15. Custom Section Title")
+        self._manage_title_entry.pack(fill="x", padx=15, pady=(0, 8))
+
+        # Content field
+        ctk.CTkLabel(form_card,
+                     text="Content / Answer:\n(Guide: one bullet point per line  |  FAQ: single answer)",
+                     font=("Inter", 11, "bold"), text_color="#555555", justify="left").pack(anchor="w", padx=15, pady=(0, 2))
+        self._manage_content_box = ctk.CTkTextbox(form_card, height=160)
+        self._manage_content_box.pack(fill="x", padx=15, pady=(0, 12))
+
+        # Form status label
+        self._manage_status_lbl = ctk.CTkLabel(form_card, text="",
+                                               font=("Inter", 11), text_color="#D8000C")
+        self._manage_status_lbl.pack(anchor="w", padx=15)
+
+        # Action buttons row
+        btn_row = ctk.CTkFrame(form_card, fg_color="transparent")
+        btn_row.pack(fill="x", padx=15, pady=(4, 14))
+
+        self._manage_save_btn = ctk.CTkButton(
+            btn_row, text="+ Add Item", width=110, height=32,
+            fg_color="#1E4528", hover_color="#14301C",
+            font=("Inter", 11, "bold"),
+            command=self._save_manage_item
+        )
+        self._manage_save_btn.pack(side="left", padx=(0, 8))
+
+        self._manage_cancel_btn = ctk.CTkButton(
+            btn_row, text="✕ Cancel", width=80, height=32,
+            fg_color="#E0E0E0", text_color="black", hover_color="#CCCCCC",
+            font=("Inter", 11),
+            command=self._reset_manage_form
+        )
+        self._manage_cancel_btn.pack(side="left")
+
+        # ── RIGHT: Existing Custom Items List ─────────────────────────
+        list_card = ctk.CTkFrame(body, fg_color="#F9FAFB", corner_radius=8)
+        list_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        list_card.grid_rowconfigure(1, weight=1)
+        list_card.grid_columnconfigure(0, weight=1)
+
+        list_hdr = ctk.CTkFrame(list_card, fg_color="transparent")
+        list_hdr.grid(row=0, column=0, sticky="ew", padx=15, pady=(14, 4))
+        ctk.CTkLabel(list_hdr, text="Custom Items",
+                     font=("Inter", 13, "bold"), text_color="#1A1A1A").pack(side="left")
+        ctk.CTkLabel(list_hdr, text="(Built-in entries not shown here)",
+                     font=("Inter", 10, "italic"), text_color="gray").pack(side="left", padx=8)
+
+        self._manage_list_scroll = ctk.CTkScrollableFrame(
+            list_card, fg_color="transparent")
+        self._manage_list_scroll.grid(
+            row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+
+        self._render_manage_list()
+
+    # ── helpers ──────────────────────────────────────────────────────────
+
+    def _render_manage_list(self):
+        scroll = self._manage_list_scroll
+        for w in scroll.winfo_children():
+            w.destroy()
+
+        guide_rows = self._fetch_custom_items("guide")
+        faq_rows = self._fetch_custom_items("faq")
+        all_rows = guide_rows + faq_rows
+
+        if not all_rows:
+            ctk.CTkLabel(scroll, text="No custom items yet. Use the form to add one.",
+                         text_color="gray", font=("Inter", 11)).pack(pady=20)
+            return
+
+        for i, row in enumerate(all_rows):
+            bg = "#FFFFFF" if i % 2 == 0 else "#F0F0F0"
+            card = ctk.CTkFrame(scroll, fg_color=bg, corner_radius=6,
+                                border_width=1, border_color="#E0E0E0")
+            card.pack(fill="x", pady=(0, 5))
+
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=12, pady=(8, 2))
+
+            # Type badge
+            type_color = "#1E4528" if row["item_type"] == "guide" else "#2980B9"
+            type_label = "Guide" if row["item_type"] == "guide" else "FAQ"
+            ctk.CTkLabel(top, text=type_label,
+                         fg_color=type_color, text_color="white",
+                         font=("Inter", 10, "bold"), corner_radius=4,
+                         padx=6, pady=2).pack(side="left", padx=(0, 8))
+
+            if row["admin_only"]:
+                ctk.CTkLabel(top, text="Admin Only",
+                             fg_color="#E67E22", text_color="white",
+                             font=("Inter", 10, "bold"), corner_radius=4,
+                             padx=6, pady=2).pack(side="left", padx=(0, 8))
+
+            ctk.CTkLabel(top, text=row["title"],
+                         font=("Inter", 11, "bold"), text_color="#1A1A1A",
+                         wraplength=340, justify="left").pack(side="left")
+
+            # Content preview
+            preview = row["content"][:120] + \
+                ("…" if len(row["content"]) > 120 else "")
+            ctk.CTkLabel(card, text=preview,
+                         font=("Inter", 10), text_color="#555555",
+                         wraplength=380, justify="left").pack(anchor="w", padx=12, pady=(0, 6))
+
+            # Edit / Delete buttons
+            btn_bar = ctk.CTkFrame(card, fg_color="transparent")
+            btn_bar.pack(anchor="e", padx=12, pady=(0, 8))
+
+            ctk.CTkButton(
+                btn_bar, text="✎ Edit", width=65, height=26,
+                fg_color="#3498DB", hover_color="#2980B9",
+                font=("Inter", 10, "bold"),
+                command=lambda r=row: self._load_item_for_edit(r)
+            ).pack(side="left", padx=(0, 6))
+
+            ctk.CTkButton(
+                btn_bar, text="🗑 Delete", width=72, height=26,
+                fg_color="#D8000C", hover_color="#B00000",
+                font=("Inter", 10, "bold"),
+                command=lambda r=row: self._confirm_delete_item(r)
+            ).pack(side="left")
+
+    def _save_manage_item(self):
+        """Insert (Add) or UPDATE (Edit) a custom help item."""
+        title = self._manage_title_entry.get().strip()
+        content = self._manage_content_box.get("1.0", "end-1c").strip()
+        itype = self._manage_type_var.get()
+        admin_only = self._manage_admin_var.get()
+
+        if not title or not content:
+            self._manage_status_lbl.configure(
+                text="⚠ Title and content are required.")
+            return
+
+        conn = get_connection()
+        if not conn:
+            self._manage_status_lbl.configure(
+                text="⚠ Database connection failed.")
+            return
+
+        try:
+            c = conn.cursor()
+            if self._manage_editing_id is None:
+                # INSERT
+                c.execute(
+                    "INSERT INTO help_custom_items (item_type, admin_only, title, content) VALUES (%s, %s, %s, %s)",
+                    (itype, admin_only, title, content)
+                )
+                msg = "Item added successfully."
+            else:
+                # UPDATE
+                c.execute(
+                    "UPDATE help_custom_items SET item_type=%s, admin_only=%s, title=%s, content=%s WHERE item_id=%s",
+                    (itype, admin_only, title, content, self._manage_editing_id)
+                )
+                msg = "Item updated successfully."
+            conn.commit()
+            self._manage_status_lbl.configure(
+                text=f"✔ {msg}", text_color="#2ECC71")
+        except Exception as e:
+            self._manage_status_lbl.configure(text=f"⚠ Error: {e}")
+            return
+        finally:
+            if conn.is_connected():
+                c.close()
+                conn.close()
+
+        self._reset_manage_form()
+        self._render_manage_list()
+
+    def _load_item_for_edit(self, row):
+        """Populate the form with an existing item for editing."""
+        self._manage_editing_id = row["item_id"]
+        self._manage_type_var.set(row["item_type"])
+        self._manage_admin_var.set(int(row["admin_only"]))
+
+        self._manage_title_entry.delete(0, "end")
+        self._manage_title_entry.insert(0, row["title"])
+
+        self._manage_content_box.delete("1.0", "end")
+        self._manage_content_box.insert("1.0", row["content"])
+
+        self._manage_save_btn.configure(text="✔ Save Changes")
+        self._manage_status_lbl.configure(
+            text="Editing item — make changes and click Save.", text_color="#3498DB")
+
+    def _confirm_delete_item(self, row):
+        if not messagebox.askyesno(
+            "Confirm Delete",
+            f"Delete custom item:\n\"{row['title']}\"\n\nThis action cannot be undone.",
+            parent=self.winfo_toplevel()
+        ):
+            return
+        self._delete_custom_item(row["item_id"])
+        # If we were editing this item, reset the form
+        if self._manage_editing_id == row["item_id"]:
+            self._reset_manage_form()
+        self._render_manage_list()
+
+    def _reset_manage_form(self):
+        """Clear the form and return to Add mode."""
+        self._manage_editing_id = None
+        self._manage_type_var.set("guide")
+        self._manage_admin_var.set(0)
+        self._manage_title_entry.delete(0, "end")
+        self._manage_content_box.delete("1.0", "end")
+        self._manage_save_btn.configure(text="+ Add Item")
+        self._manage_status_lbl.configure(text="", text_color="#D8000C")
